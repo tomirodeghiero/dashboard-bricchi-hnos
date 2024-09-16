@@ -31,9 +31,9 @@ const storage = new CloudinaryStorage({
 const uploadMiddleware = multer({
   storage: storage,
 }).fields([
-  { name: "images", maxCount: 10 }, // Para imágenes
-  { name: "technical_sheet", maxCount: 1 }, // Para ficha técnica (PDF)
-  { name: "manuals", maxCount: 5 }, // Para manuales (PDFs)
+  { name: "images", maxCount: 10 },
+  { name: "technical_sheet", maxCount: 1 },
+  { name: "manuals", maxCount: 5 },
 ]);
 
 app.use(
@@ -55,11 +55,9 @@ mongoose.connect(process.env.DB_HOST, {
 //   try {
 //     console.log("Connected to the database");
 
-//     // Eliminar todos los productos
 //     const result = await Product.deleteMany({});
 //     console.log(`Deleted ${result.deletedCount} products from the database`);
 
-//     // Cerrar la conexión
 //     mongoose.connection.close();
 //     console.log("Database connection closed");
 //   } catch (error) {
