@@ -1,10 +1,10 @@
-import "react-toastify/dist/ReactToastify.css";
-import { ToastContainer, toast } from "react-toastify";
 import { useRouter } from "next/router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { ToastContainer, toast } from "react-toastify";
 import Card from "@mui/material/Card";
-import { styled, useTheme } from "@mui/material/styles";
+import { styled } from "@mui/material/styles";
 import { Button } from "@mui/material";
+import "react-toastify/dist/ReactToastify.css";
 
 // Styled component for the triangle shaped background image
 const StyledCard = styled(Card)(({ theme, isSelected }) => ({
@@ -23,11 +23,8 @@ const StyledCard = styled(Card)(({ theme, isSelected }) => ({
 
 const MyProductsPage = () => {
   const router = useRouter();
-  const theme = useTheme();
   const [products, setProducts] = useState<any[]>([]);
-  const [selectedProduct, setSelectedProduct] = useState<string>("");
   const [loadingProducts, setLoadingProducts] = useState<boolean>(true);
-  const dropdownRef = useRef<any>(null);
 
   useEffect(() => {
     fetchProducts();

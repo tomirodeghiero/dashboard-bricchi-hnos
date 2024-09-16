@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/router";
-import { FormControl, InputLabel, MenuItem, Select, Button } from "@mui/material";
 import dynamic from "next/dynamic";
+import { CATEGORIES } from "src/utils/constants";
 import { toast, ToastContainer } from "react-toastify";
+import { FormControl, InputLabel, MenuItem, Select, Button } from "@mui/material";
 import "react-toastify/dist/ReactToastify.css";
-import { CATEGORIES } from "src/utils/constants"; // Asegúrate de tener tus categorías
 
 const ReactQuill = dynamic(() => import("react-quill"), { ssr: false });
 
 const EditProductPage = () => {
   const router = useRouter();
-  const { id } = router.query; // ID del producto a editar
+  const { id } = router.query;
 
   const [productName, setProductName] = useState("");
   const [category, setCategory] = useState("");
@@ -20,13 +20,11 @@ const EditProductPage = () => {
   const [mainImageUrl, setMainImageUrl] = useState<File | null>(null);
   const [previewImages, setPreviewImages] = useState<File[]>([]);
 
-  // Estado para almacenar las URLs de los archivos ya guardados
   const [existingTechnicalSheetUrl, setExistingTechnicalSheetUrl] = useState<string | null>(null);
   const [existingManualUrls, setExistingManualUrls] = useState<string[]>([]);
   const [existingMainImageUrl, setExistingMainImageUrl] = useState<string | null>(null);
   const [existingPreviewImagesUrls, setExistingPreviewImagesUrls] = useState<string[]>([]);
 
-  // Cargar el producto existente
   useEffect(() => {
     if (id) {
       const fetchProduct = async () => {
@@ -38,7 +36,6 @@ const EditProductPage = () => {
             setCategory(data.category);
             setSpecifications(data.specifications);
 
-            // Cargar las URLs de los archivos existentes
             setExistingMainImageUrl(data.mainImageUrl);
             setExistingPreviewImagesUrls(data.secondaryImageUrls || []);
             setExistingTechnicalSheetUrl(data.technical_sheet?.url || null);
@@ -86,7 +83,7 @@ const EditProductPage = () => {
 
       if (response.ok) {
         toast.success("Producto editado exitosamente", { position: "top-center" });
-        router.push("/my-products"); // Redirigir a la lista de productos después de editar
+        router.push("/my-products");
       } else {
         toast.error("Error al editar el producto", { position: "top-center" });
       }
