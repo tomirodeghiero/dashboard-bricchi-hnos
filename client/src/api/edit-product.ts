@@ -21,7 +21,7 @@ export default async function handler(req: any, res: any) {
 
       try {
         // Extrae los campos del formulario
-        const { name, description, category, stock, specifications, additional_info } = fields;
+        const { name, description, category, stock, specifications } = fields;
         const productId = req.query.id;
 
         // Verifica si el producto existe en la base de datos

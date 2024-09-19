@@ -63,7 +63,6 @@ const AddProductPage = () => {
     if (category) formData.append("category", category);
     if (subCategory) formData.append("subCategory", subCategory);
     formData.append("specifications", specifications || "");
-    formData.append("additional_info", additional_info || "");
 
     if (technicalSheet) {
       formData.append("technical_sheet", technicalSheet, technicalSheet.name);

@@ -110,7 +110,7 @@ app.post("/api/add-product", uploadMiddleware, async (req, res) => {
   console.log(req.body); // Para ver los campos que llegan del formulario
   console.log(req.files); // Para ver los archivos subidos
   try {
-    const { name, description, category, subCategory, additional_info, specifications } = req.body;
+    const { name, description, category, subCategory, specifications } = req.body;
 
     // Validar si se han subido imágenes
     if (!req.files || !req.files["images"] || req.files["images"].length === 0) {
@@ -138,7 +138,6 @@ app.post("/api/add-product", uploadMiddleware, async (req, res) => {
         file_name: req.files["manuals"] ? req.files["manuals"][index].originalname : "",
         url,
       })),
-      additional_info,
       category,
       subCategory: subCategory || null,
     });

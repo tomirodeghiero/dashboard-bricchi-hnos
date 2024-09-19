@@ -26,7 +26,6 @@ export default async function handler(req: any, res: any) {
           subCategory,
           stock,
           specifications,
-          additional_info,
         } = fields;
 
         // Validar solo el campo requerido
@@ -47,7 +46,6 @@ export default async function handler(req: any, res: any) {
           subCategory: subCategory || null,
           specifications: specifications || "",
           stock: stock ? parseInt(stock as string) : 0,
-          additional_info: additional_info || "",
           images: [
             { url: mainImageUrl?.filepath, description: "Main image" },
             ...secondaryImages.map((img: any) => ({
