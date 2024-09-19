@@ -29,9 +29,9 @@ export default async function handler(req: any, res: any) {
           additional_info,
         } = fields;
 
-        // Validar campos requeridos
-        if (!name || !description || !category || !specifications) {
-          return res.status(400).json({ error: "Missing required fields" });
+        // Validar solo el campo requerido
+        if (!name) {
+          return res.status(400).json({ error: "The name is required" });
         }
 
         // Manejo de archivos subidos (Ficha Técnica, Manuales, Imágenes)
@@ -43,11 +43,11 @@ export default async function handler(req: any, res: any) {
         // Guardar producto en MongoDB
         const newProduct = new Product({
           name,
-          category,
-          subCategory,
-          specifications,
+          category: category || null,
+          subCategory: subCategory || null,
+          specifications: specifications || "",
           stock: stock ? parseInt(stock as string) : 0,
-          additional_info,
+          additional_info: additional_info || "",
           images: [
             { url: mainImageUrl?.filepath, description: "Main image" },
             ...secondaryImages.map((img: any) => ({

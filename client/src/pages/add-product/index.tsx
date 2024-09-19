@@ -56,20 +56,14 @@ const AddProductPage = () => {
     e.preventDefault();
 
     if (!productName) return showErrorMessage("El nombre del producto está vacío");
-    if (!category) return showErrorMessage("La categoría no está especificada");
-    if (!mainImageUrl) return showErrorMessage("La imagen principal está vacía");
-    if (!technicalSheet) return showErrorMessage("La ficha técnica está vacía");
 
     const formData = new FormData();
     formData.append("name", productName);
-    formData.append("category", category);
 
-    if (subCategory) {
-      formData.append("subCategory", subCategory);
-    }
-
-    formData.append("specifications", specifications);
-    formData.append("additional_info", "");
+    if (category) formData.append("category", category);
+    if (subCategory) formData.append("subCategory", subCategory);
+    formData.append("specifications", specifications || "");
+    formData.append("additional_info", additional_info || "");
 
     if (technicalSheet) {
       formData.append("technical_sheet", technicalSheet, technicalSheet.name);
