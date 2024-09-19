@@ -9,6 +9,7 @@ const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const cloudinary = require("cloudinary").v2;
 const cookieParser = require("cookie-parser");
 const Product = require("./models/Product");
+const Category = require('./models/Category');
 const app = express();
 
 mongoose.set("strictQuery", false);
@@ -106,8 +107,10 @@ app.get("/api/product/:id", async (req, res) => {
 
 // POST - Add a new product
 app.post("/api/add-product", uploadMiddleware, async (req, res) => {
+  console.log(req.body); // Para ver los campos que llegan del formulario
+  console.log(req.files); // Para ver los archivos subidos
   try {
-    const { name, description, category, additional_info, specifications } = req.body;
+    const { name, description, category, subCategory, additional_info, specifications } = req.body;
 
     // Validar si se han subido imágenes
     if (!req.files || !req.files["images"] || req.files["images"].length === 0) {
@@ -137,6 +140,7 @@ app.post("/api/add-product", uploadMiddleware, async (req, res) => {
       })),
       additional_info,
       category,
+      subCategory: subCategory || null,
     });
 
     await product.save();
@@ -184,6 +188,46 @@ app.delete("/api/delete-product/:id", async (req, res) => {
     res.status(200).json({ message: "Product deleted successfully" });
   } catch (err) {
     console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// GET - Obtener una categoría específica por ID
+app.get("/api/category/:id", async (req, res) => {
+  try {
+    const categoryId = req.params.id;
+    const category = await Category.findById(categoryId).populate('subcategories');
+
+    if (!category) {
+      return res.status(404).json({ message: "Category not found" });
+    }
+
+    res.status(200).json({ category });
+  } catch (err) {
+    console.error("Error fetching category:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
+
+// DELETE - Eliminar una categoría y sus subcategorías
+app.delete("/api/delete-category/:id", async (req, res) => {
+  try {
+    const categoryId = req.params.id;
+
+    const category = await Category.findByIdAndRemove(categoryId);
+    if (!category) {
+      return res.status(404).json({ message: "Category not found" });
+    }
+
+    await Category.updateMany(
+      { subcategories: categoryId },
+      { $pull: { subcategories: categoryId } }
+    );
+
+    res.status(200).json({ message: "Category deleted successfully" });
+  } catch (err) {
+    console.error("Error deleting category:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
@@ -241,6 +285,81 @@ app.put("/api/edit-product/:id", uploadMiddleware, async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+
+// POST - Add a new category or subcategory
+app.post("/api/add-category", async (req, res) => {
+  try {
+    const { name, subcategories } = req.body;
+
+    const category = new Category({
+      name,
+      subcategories: subcategories || []
+    });
+
+    await category.save();
+
+    if (subcategories && subcategories.length > 0) {
+      await Category.updateMany(
+        { _id: { $in: subcategories } },
+        { $push: { subcategories: category._id } }
+      );
+    }
+
+    res.status(200).json({ message: "Category added successfully", category });
+  } catch (err) {
+    console.error("Error adding category:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
+
+// GET - Obtener todas las categorías
+app.get("/api/categories", async (req, res) => {
+  try {
+    const categories = await Category.find().populate('subcategories');
+    res.status(200).json({ categories });
+  } catch (err) {
+    console.error("Error fetching categories:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
+// PUT - Actualizar una categoría por ID
+app.put("/api/edit-category/:id", async (req, res) => {
+  try {
+    const categoryId = req.params.id;
+    const { name, subcategories } = req.body;
+
+    // Actualizar la categoría con los nuevos datos
+    const updatedCategory = await Category.findByIdAndUpdate(
+      categoryId,
+      {
+        name,
+        subcategories: subcategories || [],
+      },
+      { new: true }
+    ).populate("subcategories");
+
+    if (!updatedCategory) {
+      return res.status(404).json({ message: "Category not found" });
+    }
+
+    // Actualizar la relación en las subcategorías
+    if (subcategories && subcategories.length > 0) {
+      await Category.updateMany(
+        { _id: { $in: subcategories } },
+        { $push: { subcategories: categoryId } }
+      );
+    }
+
+    res.status(200).json({ message: "Category updated successfully", category: updatedCategory });
+  } catch (err) {
+    console.error("Error updating category:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
+
 
 // Listen port
 app.listen(5001, () => {

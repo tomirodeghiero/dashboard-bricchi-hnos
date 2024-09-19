@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   FormControl,
   InputLabel,
@@ -9,7 +9,6 @@ import {
 import dynamic from "next/dynamic";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import { CATEGORIES } from "src/utils/constants";
 import { addBreaksAfterPeriods } from "src/utils/functions";
 
 const ReactQuill = dynamic(() => import("react-quill"), { ssr: false });
@@ -17,12 +16,28 @@ const ReactQuill = dynamic(() => import("react-quill"), { ssr: false });
 const AddProductPage = () => {
   const [productName, setProductName] = useState("");
   const [category, setCategory] = useState("");
+  const [subCategory, setSubCategory] = useState("");
   const [specifications, setSpecifications] = useState("");
   const [technicalSheet, setTechnicalSheet] = useState<File | null>(null);
   const [manuals, setManuals] = useState<File[]>([]);
   const [mainImageUrl, setMainImageUrl] = useState<File | null>(null);
   const [previewImages, setPreviewImages] = useState<File[]>([]);
+  const [categories, setCategories] = useState([]);
   const formRef = useRef(null);
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch("/api/categories");
+        const data = await response.json();
+        setCategories(data.categories);
+      } catch (error) {
+        console.error("Error fetching categories:", error);
+      }
+    };
+
+    fetchCategories();
+  }, []);
 
   const showErrorMessage = (message: string) => {
     toast.error(message, {
@@ -48,6 +63,11 @@ const AddProductPage = () => {
     const formData = new FormData();
     formData.append("name", productName);
     formData.append("category", category);
+
+    if (subCategory) {
+      formData.append("subCategory", subCategory);
+    }
+
     formData.append("specifications", specifications);
     formData.append("additional_info", "");
 
@@ -74,9 +94,9 @@ const AddProductPage = () => {
       });
 
       if (response.ok) {
-        // Reset form and scroll to top
         setProductName("");
         setCategory("");
+        setSubCategory("");
         setSpecifications("");
         setMainImageUrl(null);
         setPreviewImages([]);
@@ -115,6 +135,8 @@ const AddProductPage = () => {
     }
   };
 
+  const selectedCategory = categories.find((cat) => cat._id === category);
+
   return (
     <>
       <div ref={formRef} className="lg:flex w-full gap-8">
@@ -139,14 +161,33 @@ const AddProductPage = () => {
                 onChange={(e) => setCategory(e.target.value)}
                 label="Categoría"
               >
-                {CATEGORIES.map((categoryOption, index) => (
-                  <MenuItem key={index} value={categoryOption}>
-                    {categoryOption}
+                {categories.map((categoryOption) => (
+                  <MenuItem key={categoryOption._id} value={categoryOption._id}>
+                    {categoryOption.name}
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
           </div>
+
+          {selectedCategory && selectedCategory.subcategories.length > 0 && (
+            <div className="mt-5">
+              <FormControl variant="outlined" fullWidth>
+                <InputLabel>Subcategoría</InputLabel>
+                <Select
+                  value={subCategory}
+                  onChange={(e) => setSubCategory(e.target.value)}
+                  label="Subcategoría"
+                >
+                  {selectedCategory.subcategories.map((subCat) => (
+                    <MenuItem key={subCat._id} value={subCat._id}>
+                      {subCat.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </div>
+          )}
 
           <div className="mt-5">
             <ReactQuill

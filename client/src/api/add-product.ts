@@ -23,6 +23,7 @@ export default async function handler(req: any, res: any) {
           name,
           description,
           category,
+          subCategory,
           stock,
           specifications,
           additional_info,
@@ -43,6 +44,7 @@ export default async function handler(req: any, res: any) {
         const newProduct = new Product({
           name,
           category,
+          subCategory,
           specifications,
           stock: stock ? parseInt(stock as string) : 0,
           additional_info,
