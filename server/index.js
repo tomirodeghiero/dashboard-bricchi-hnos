@@ -42,7 +42,7 @@ console.log("front url:", process.env.FRONTEND_PUBLIC_URL);
 app.use(
   cors({
     credentials: true,
-    origin: ["https://server-dashboardbricchihnos.vercel.app", "http://localhost:3000", "http://localhost:3001", process.env.FRONTEND_PUBLIC_URL],
+    origin: ["https://server-dashboardbricchihnos.vercel.app", "https://www.bricchihnos.com", "http://localhost:3000", "http://localhost:3001", process.env.FRONTEND_PUBLIC_URL],
   })
 );
 app.use(express.json());
