@@ -128,7 +128,7 @@ const AddProductPage = () => {
     }
   };
 
-  const selectedCategory = categories.find((cat) => cat._id === category);
+  const selectedCategory = categories?.find((cat) => cat._id === category);
 
   return (
     <>

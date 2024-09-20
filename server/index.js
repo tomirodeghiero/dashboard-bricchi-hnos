@@ -107,35 +107,49 @@ app.get("/api/product/:id", async (req, res) => {
 
 // POST - Add a new product
 app.post("/api/add-product", uploadMiddleware, async (req, res) => {
-  console.log(req.body); // Para ver los campos que llegan del formulario
-  console.log(req.files); // Para ver los archivos subidos
   try {
+    // Mostrar el cuerpo de la solicitud y los archivos para depurar
+    console.log("Body:", req.body);
+    console.log("Files:", req.files);
+
     const { name, description, category, subCategory, specifications } = req.body;
 
-    // Validar si se han subido imágenes
-    if (!req.files || !req.files["images"] || req.files["images"].length === 0) {
-      return res.status(400).json({ message: "Se requiere al menos una imagen." });
+    // Validar si el campo 'name' está vacío
+    if (!name || name.trim() === "") {
+      return res.status(400).json({ message: "El nombre del producto es obligatorio." });
     }
 
-    const mainImageUrl = req.files["images"][0].path;  // URL de la imagen principal
-    const secondaryImageUrls = req.files["images"].slice(1).map((file) => file.path);  // URLs de las imágenes secundarias
+    // Procesar las imágenes si están presentes
+    let mainImageUrl = "";
+    let secondaryImageUrls = [];
+    if (req.files && req.files["images"] && req.files["images"].length > 0) {
+      mainImageUrl = req.files["images"][0].path; // URL de la imagen principal
+      secondaryImageUrls = req.files["images"].slice(1).map((file) => file.path); // URLs de las imágenes secundarias
+    }
 
-    const technicalSheetUrl = req.files["technical_sheet"] ? req.files["technical_sheet"][0].path : "";
-    const manualUrls = req.files["manuals"] ? req.files["manuals"].map((file) => file.path) : [];
+    // Procesar la ficha técnica si está presente
+    const technicalSheetUrl = req.files && req.files["technical_sheet"]
+      ? req.files["technical_sheet"][0].path
+      : "";
+
+    // Procesar los manuales si están presentes
+    const manualUrls = req.files && req.files["manuals"]
+      ? req.files["manuals"].map((file) => file.path)
+      : [];
 
     // Crear el producto
     const product = new Product({
       name,
       description,
-      mainImageUrl,
+      mainImageUrl, // Esta será una cadena vacía si no hay imagen principal
       specifications,
-      secondaryImageUrls,
+      secondaryImageUrls, // Será un array vacío si no hay imágenes secundarias
       technical_sheet: {
-        file_name: req.files["technical_sheet"] ? req.files["technical_sheet"][0].originalname : "",
-        url: technicalSheetUrl,
+        file_name: req.files && req.files["technical_sheet"] ? req.files["technical_sheet"][0].originalname : "",
+        url: technicalSheetUrl, // Será una cadena vacía si no hay ficha técnica
       },
       manuals: manualUrls.map((url, index) => ({
-        file_name: req.files["manuals"] ? req.files["manuals"][index].originalname : "",
+        file_name: req.files && req.files["manuals"] ? req.files["manuals"][index].originalname : "",
         url,
       })),
       category,
@@ -143,10 +157,10 @@ app.post("/api/add-product", uploadMiddleware, async (req, res) => {
     });
 
     await product.save();
-    res.status(200).json({ message: "Product added successfully", product });
+    res.status(200).json({ message: "Producto agregado exitosamente", product });
   } catch (err) {
-    console.error('Error adding product:', err);
-    res.status(500).json({ message: "Server error", error: err.message });
+    console.error("Error adding product:", err);
+    res.status(500).json({ message: "Error en el servidor", error: err.message });
   }
 });
 
