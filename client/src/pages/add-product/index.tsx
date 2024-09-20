@@ -5,6 +5,9 @@ import {
   MenuItem,
   Select,
   Button,
+  Card,
+  CardContent,
+  CircularProgress,
 } from "@mui/material";
 import dynamic from "next/dynamic";
 import { toast, ToastContainer } from "react-toastify";
@@ -23,6 +26,7 @@ const AddProductPage = () => {
   const [mainImageUrl, setMainImageUrl] = useState<File | null>(null);
   const [previewImages, setPreviewImages] = useState<File[]>([]);
   const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(false);
   const formRef = useRef(null);
 
   useEffect(() => {
@@ -54,38 +58,21 @@ const AddProductPage = () => {
 
   const handleSubmitProduct = async (e: any) => {
     e.preventDefault();
-
+    setLoading(true); // Mostrar indicador de carga
     if (!productName) return showErrorMessage("El nombre del producto está vacío");
 
     const formData = new FormData();
     formData.append("name", productName);
-
     if (category) formData.append("category", category);
     if (subCategory) formData.append("subCategory", subCategory);
     formData.append("specifications", specifications || "");
-
-    if (technicalSheet) {
-      formData.append("technical_sheet", technicalSheet, technicalSheet.name);
-    }
-
-    manuals.forEach((manual, index) => {
-      formData.append("manuals", manual, manual.name);
-    });
-
-    if (mainImageUrl) {
-      formData.append("images", mainImageUrl, mainImageUrl.name);
-    }
-
-    previewImages.forEach((image, index) => {
-      formData.append("images", image, `secondary-image-${index}`);
-    });
+    if (technicalSheet) formData.append("technical_sheet", technicalSheet, technicalSheet.name);
+    manuals.forEach((manual) => formData.append("manuals", manual, manual.name));
+    if (mainImageUrl) formData.append("images", mainImageUrl, mainImageUrl.name);
+    previewImages.forEach((image, index) => formData.append("images", image, `secondary-image-${index}`));
 
     try {
-      const response = await fetch("/api/add-product", {
-        method: "POST",
-        body: formData,
-      });
-
+      const response = await fetch("/api/add-product", { method: "POST", body: formData });
       if (response.ok) {
         setProductName("");
         setCategory("");
@@ -95,12 +82,7 @@ const AddProductPage = () => {
         setPreviewImages([]);
         setTechnicalSheet(null);
         setManuals([]);
-        toast.success("Producto agregado exitosamente", {
-          position: "top-center",
-          autoClose: 5000,
-        });
-
-        // Scroll to top
+        toast.success("Producto agregado exitosamente", { position: "top-center", autoClose: 5000 });
         formRef.current?.scrollIntoView({ behavior: "smooth" });
       } else {
         toast.error("Falló al agregar el producto", { position: "top-center" });
@@ -108,6 +90,8 @@ const AddProductPage = () => {
     } catch (error) {
       console.error(error);
       alert("Error al agregar el producto");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -132,46 +116,35 @@ const AddProductPage = () => {
 
   return (
     <>
-      <div ref={formRef} className="lg:flex w-full gap-8">
-        <div className="w-full lg:1/2">
-          <p className="uppercase font-medium text-sm text-gray-500">
-            🛍️ ¡Agregar un nuevo producto!
-          </p>
-          <div className="flex gap-5 items-center">
+      <div ref={formRef} className="flex justify-center items-center w-full">
+        <Card className="shadow-lg w-full max-w-7xl">
+          <CardContent>
+            <p className="uppercase font-medium text-lg text-gray-500 mb-6">
+              🛍️ ¡Agregar un nuevo producto!
+            </p>
             <input
-              className="text-gray-800 px-2 h-14 bg-gray-200 mt-1 text-4xl w-full font-medium"
+              className="text-gray-800 px-3 h-16 bg-gray-200 mt-2 mb-5 text-2xl w-full font-medium border-b-2 border-gray-300 focus:border-blue-500 transition"
               value={productName}
-              placeholder="Nombre del producto"
+              placeholder="Nombre del Producto"
               onChange={(e) => setProductName(e.target.value)}
             />
-          </div>
-
-          <div className="mt-5">
             <FormControl variant="outlined" fullWidth>
               <InputLabel>Categoría</InputLabel>
-              <Select
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                label="Categoría"
-              >
-                {categories.map((categoryOption) => (
-                  <MenuItem key={categoryOption._id} value={categoryOption._id}>
-                    {categoryOption.name}
-                  </MenuItem>
-                ))}
+              <Select value={category} onChange={(e) => setCategory(e.target.value)} label="Categoría">
+                {categories
+                  .filter((cat) => !cat.isSubCategory) // Filtrar solo categorías principales
+                  .map((categoryOption) => (
+                    <MenuItem key={categoryOption._id} value={categoryOption._id}>
+                      {categoryOption.name}
+                    </MenuItem>
+                  ))}
               </Select>
             </FormControl>
-          </div>
 
-          {selectedCategory && selectedCategory.subcategories.length > 0 && (
-            <div className="mt-5">
-              <FormControl variant="outlined" fullWidth>
+            {selectedCategory && selectedCategory.subcategories.length > 0 && (
+              <FormControl variant="outlined" fullWidth className="mt-8" style={{ marginTop: '2rem' }}>
                 <InputLabel>Subcategoría</InputLabel>
-                <Select
-                  value={subCategory}
-                  onChange={(e) => setSubCategory(e.target.value)}
-                  label="Subcategoría"
-                >
+                <Select value={subCategory} onChange={(e) => setSubCategory(e.target.value)} label="Subcategoría">
                   {selectedCategory.subcategories.map((subCat) => (
                     <MenuItem key={subCat._id} value={subCat._id}>
                       {subCat.name}
@@ -179,123 +152,77 @@ const AddProductPage = () => {
                   ))}
                 </Select>
               </FormControl>
+            )}
+
+            <div className="mt-8">
+              <ReactQuill value={addBreaksAfterPeriods(specifications)} onChange={setSpecifications} />
             </div>
-          )}
 
-          <div className="mt-5">
-            <ReactQuill
-              value={addBreaksAfterPeriods(specifications)}
-              onChange={setSpecifications}
-            />
-          </div>
-
-          <div className="mt-5">
-            <input
-              type="file"
-              onChange={(e: any) => setTechnicalSheet(e.target.files[0])}
-              accept="application/pdf"
-              className="hidden"
-              id="technicalSheet"
-            />
-            <label
-              htmlFor="technicalSheet"
-              className="bg-gray-200 px-4 py-2 rounded cursor-pointer"
-            >
-              {technicalSheet
-                ? `Archivo subido: ${technicalSheet.name}`
-                : "Subir Ficha Técnica (PDF)"}
-            </label>
-          </div>
-
-          <div className="mt-5">
-            <input
-              type="file"
-              multiple
-              onChange={handleManualChange}
-              accept="application/pdf"
-              className="hidden"
-              id="manualFiles"
-            />
-            <label
-              htmlFor="manualFiles"
-              className="bg-gray-200 px-4 py-2 rounded cursor-pointer"
-            >
-              Subir Manuales (PDF)
-            </label>
-            {manuals.length > 0 && (
-              <ul className="mt-2">
-                {manuals.map((manual, index) => (
-                  <li key={index}>{manual.name}</li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          <div className="mt-5">
-            <input
-              type="file"
-              onChange={handleMainImageChange}
-              accept="image/*"
-              className="hidden"
-              id="mainImage"
-            />
-            <label
-              htmlFor="mainImage"
-              className="bg-gray-200 px-4 py-2 rounded cursor-pointer"
-            >
-              {mainImageUrl
-                ? `Imagen principal cargada: ${mainImageUrl.name}`
-                : "Subir Imagen Principal"}
-            </label>
-
-            {mainImageUrl && (
-              <div className="mt-4">
-                <img
-                  src={URL.createObjectURL(mainImageUrl)}
-                  alt="Main Image Preview"
-                  className="object-cover h-48 w-48 rounded"
-                />
-              </div>
-            )}
-          </div>
-
-          <div className="mt-5">
-            <input
-              type="file"
-              multiple
-              onChange={handleSecondaryImagesChange}
-              accept="image/*"
-              className="hidden"
-              id="secondaryImages"
-            />
-            <label
-              htmlFor="secondaryImages"
-              className="bg-gray-200 px-4 py-2 rounded cursor-pointer"
-            >
-              Subir Imágenes Secundarias
-            </label>
-
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 w-full mt-4">
-              {previewImages.map((previewImage, index) => (
-                <div key={index}>
+            <div className="mt-8">
+              <Button variant="contained" component="label">
+                Subir Imagen Principal
+                <input type="file" onChange={handleMainImageChange} hidden />
+              </Button>
+              {mainImageUrl && (
+                <div className="mt-4">
                   <img
-                    src={URL.createObjectURL(previewImage)}
-                    alt={`Secundaria ${index}`}
-                    className="object-cover h-full w-full rounded"
+                    src={URL.createObjectURL(mainImageUrl)}
+                    alt="Main Image Preview"
+                    className="object-cover h-28 w-28 rounded mt-2"
                   />
                 </div>
-              ))}
+              )}
             </div>
-          </div>
 
-          <div className="w-full lg:1/2 mt-4">
-            <Button onClick={handleSubmitProduct} variant="contained">
-              Agregar Producto
-            </Button>
-          </div>
-        </div>
+            <div className="mt-8">
+              <Button variant="contained" component="label">
+                Subir Imágenes Secundarias
+                <input type="file" multiple onChange={handleSecondaryImagesChange} hidden />
+              </Button>
+
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 w-full mt-4">
+                {previewImages.map((previewImage, index) => (
+                  <div key={index}>
+                    <img
+                      src={URL.createObjectURL(previewImage)}
+                      alt={`Secundaria ${index}`}
+                      className="object-cover h-full w-full rounded"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <Button variant="contained" component="label">
+                Subir Ficha Técnica (PDF)
+                <input type="file" onChange={(e: any) => setTechnicalSheet(e.target.files[0])} accept="application/pdf" hidden />
+              </Button>
+              {technicalSheet && <p className="mt-2 text-gray-600">Archivo subido: {technicalSheet.name}</p>}
+            </div>
+
+            <div className="mt-8">
+              <Button variant="contained" component="label">
+                Subir Manuales (PDF)
+                <input type="file" multiple onChange={handleManualChange} accept="application/pdf" hidden />
+              </Button>
+              {manuals.length > 0 && (
+                <ul className="mt-2">
+                  {manuals.map((manual, index) => (
+                    <li key={index} className="text-gray-600">{manual.name}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div className="w-full mt-8">
+              <Button onClick={handleSubmitProduct} variant="contained" disabled={loading} className="w-full">
+                {loading ? <CircularProgress size={24} /> : "Agregar Producto"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
-
       <ToastContainer position="top-right" autoClose={5000} />
     </>
   );

@@ -67,7 +67,7 @@ const VerticalNavHeader = (props: Props) => {
             <img
               src={"/images/bricchi-hnos-logotype.png"}
               alt="Logotype"
-              className={"w-20"}
+              className={"w-full"}
             />
           </StyledLink>
         </Link>

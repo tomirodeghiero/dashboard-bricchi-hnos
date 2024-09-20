@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { ToastContainer, toast } from "react-toastify";
-import { Button, TextField, FormControl, InputLabel, Select, MenuItem } from "@mui/material";
+import { Button, TextField, FormControl, InputLabel, Select, MenuItem, Checkbox, FormControlLabel } from "@mui/material";
 import "react-toastify/dist/ReactToastify.css";
 import { useRouter } from "next/router";
 
@@ -8,6 +8,7 @@ const AddCategoryPage = () => {
   const [categoryName, setCategoryName] = useState("");
   const [allCategories, setAllCategories] = useState([]);
   const [selectedSubcategories, setSelectedSubcategories] = useState([]);
+  const [isMainCategory, setIsMainCategory] = useState(true); // Por defecto, es una categoría principal
   const router = useRouter();
 
   useEffect(() => {
@@ -28,7 +29,8 @@ const AddCategoryPage = () => {
 
     const categoryData = {
       name: categoryName,
-      subcategories: selectedSubcategories
+      subcategories: selectedSubcategories,
+      isMainCategory,
     };
 
     const response = await fetch("/api/add-category", {
@@ -61,6 +63,7 @@ const AddCategoryPage = () => {
             onChange={(e) => setCategoryName(e.target.value)}
           />
         </div>
+
         <div className="mt-4">
           <FormControl fullWidth variant="outlined">
             <InputLabel>Subcategorías</InputLabel>
@@ -78,6 +81,20 @@ const AddCategoryPage = () => {
             </Select>
           </FormControl>
         </div>
+
+        {/* Checkbox para seleccionar si es una categoría principal */}
+        <div className="mt-4">
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={isMainCategory}
+                onChange={(e) => setIsMainCategory(e.target.checked)}
+              />
+            }
+            label="¿Es una categoría principal?"
+          />
+        </div>
+
         <div className="mt-4">
           <Button type="submit" variant="contained" fullWidth>
             Añadir Categoría

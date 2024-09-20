@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { ToastContainer, toast } from "react-toastify";
-import { Button, TextField, FormControl, InputLabel, Select, MenuItem, CircularProgress } from "@mui/material";
+import { Button, TextField, FormControl, InputLabel, Select, MenuItem, CircularProgress, Checkbox, FormControlLabel } from "@mui/material";
 import "react-toastify/dist/ReactToastify.css";
 import { useRouter } from "next/router";
 
@@ -8,28 +8,27 @@ const EditCategoryPage = () => {
   const [categoryName, setCategoryName] = useState("");
   const [allCategories, setAllCategories] = useState([]);
   const [selectedSubcategories, setSelectedSubcategories] = useState([]);
-  const [loading, setLoading] = useState(true); // Estado para cargar datos
+  const [isMainCategory, setIsMainCategory] = useState(true); // Cargar si es una categoría principal
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
-  const { id } = router.query; // Obtener el id de la categoría de la URL
+  const { id } = router.query;
 
-  // Cargar la categoría actual y las categorías existentes para seleccionar subcategorías
   useEffect(() => {
     if (id) {
       const fetchCategory = async () => {
         try {
-          // Obtener la categoría que vamos a editar
           const categoryResponse = await fetch(`/api/category/${id}`);
           const categoryData = await categoryResponse.json();
 
           setCategoryName(categoryData.category.name);
           setSelectedSubcategories(categoryData.category.subcategories.map(sub => sub._id));
+          setIsMainCategory(categoryData.category.isMainCategory); // Cargar el valor de "isMainCategory"
 
-          // Obtener todas las categorías para mostrar opciones de subcategorías
           const categoriesResponse = await fetch("/api/categories");
           const categoriesData = await categoriesResponse.json();
           setAllCategories(categoriesData.categories);
 
-          setLoading(false); // Cargar completada
+          setLoading(false);
         } catch (err) {
           console.error("Error fetching category data", err);
           toast.error("Error al cargar la categoría", { position: "top-center" });
@@ -50,6 +49,7 @@ const EditCategoryPage = () => {
     const categoryData = {
       name: categoryName,
       subcategories: selectedSubcategories,
+      isMainCategory, // Enviar si es categoría principal o no
     };
 
     const response = await fetch(`/api/edit-category/${id}`, {
@@ -106,6 +106,20 @@ const EditCategoryPage = () => {
             </Select>
           </FormControl>
         </div>
+
+        {/* Checkbox para seleccionar si es una categoría principal */}
+        <div className="mt-4">
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={isMainCategory}
+                onChange={(e) => setIsMainCategory(e.target.checked)}
+              />
+            }
+            label="¿Es una categoría principal?"
+          />
+        </div>
+
         <div className="mt-4">
           <Button type="submit" variant="contained" fullWidth>
             Actualizar Categoría

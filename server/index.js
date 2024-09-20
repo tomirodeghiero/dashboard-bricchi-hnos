@@ -37,10 +37,12 @@ const uploadMiddleware = multer({
   { name: "manuals", maxCount: 5 },
 ]);
 
+console.log("front url:", process.env.FRONTEND_PUBLIC_URL);
+
 app.use(
   cors({
     credentials: true,
-    origin: ["http://localhost:3000", process.env.FRONTEND_PUBLIC_URL],
+    origin: ["http://localhost:3000", "http://localhost:3001", process.env.FRONTEND_PUBLIC_URL],
   })
 );
 app.use(express.json());
@@ -70,12 +72,18 @@ mongoose.connect(process.env.DB_HOST, {
 // GET all products with pagination
 app.get("/api/products", async (req, res) => {
   try {
+    console.log("Query params:", req.query);
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
 
     const total = await Product.countDocuments();
-    const products = await Product.find().skip(skip).limit(limit);
+    // Aquí se usa populate para traer los nombres de las categorías en lugar de los IDs
+    const products = await Product.find()
+      .populate("category", "name")  // populate trae solo el campo "name"
+      .populate("subCategory", "name")  // Traer subcategoría si aplica
+      .skip(skip)
+      .limit(limit);
 
     const totalPages = Math.ceil(total / limit);
 
@@ -94,10 +102,14 @@ app.get("/api/products", async (req, res) => {
 // GET a specific product by id
 app.get("/api/product/:id", async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const product = await Product.findById(req.params.id)
+      .populate("category", "name")  // populate para traer el nombre de la categoría
+      .populate("subCategory", "name"); // populate para la subcategoría también
+
     if (!product) {
       return res.status(404).json({ message: "Product not found" });
     }
+
     res.json(product);
   } catch (err) {
     console.error(err);
@@ -302,21 +314,15 @@ app.put("/api/edit-product/:id", uploadMiddleware, async (req, res) => {
 // POST - Add a new category or subcategory
 app.post("/api/add-category", async (req, res) => {
   try {
-    const { name, subcategories } = req.body;
+    const { name, subcategories, isMainCategory } = req.body;
 
     const category = new Category({
       name,
-      subcategories: subcategories || []
+      subcategories: subcategories || [],
+      isMainCategory: isMainCategory !== undefined ? isMainCategory : true,
     });
 
     await category.save();
-
-    if (subcategories && subcategories.length > 0) {
-      await Category.updateMany(
-        { _id: { $in: subcategories } },
-        { $push: { subcategories: category._id } }
-      );
-    }
 
     res.status(200).json({ message: "Category added successfully", category });
   } catch (err) {
@@ -325,8 +331,7 @@ app.post("/api/add-category", async (req, res) => {
   }
 });
 
-
-// GET - Obtener todas las categorías
+// GET - Obtener todas las categorías (sin filtro, devolver todas)
 app.get("/api/categories", async (req, res) => {
   try {
     const categories = await Category.find().populate('subcategories');
@@ -337,33 +342,21 @@ app.get("/api/categories", async (req, res) => {
   }
 });
 
+
 // PUT - Actualizar una categoría por ID
 app.put("/api/edit-category/:id", async (req, res) => {
   try {
-    const categoryId = req.params.id;
-    const { name, subcategories } = req.body;
+    const { name, subcategories, isMainCategory } = req.body;
 
-    // Actualizar la categoría con los nuevos datos
     const updatedCategory = await Category.findByIdAndUpdate(
-      categoryId,
+      req.params.id,
       {
         name,
         subcategories: subcategories || [],
+        isMainCategory: isMainCategory,
       },
       { new: true }
-    ).populate("subcategories");
-
-    if (!updatedCategory) {
-      return res.status(404).json({ message: "Category not found" });
-    }
-
-    // Actualizar la relación en las subcategorías
-    if (subcategories && subcategories.length > 0) {
-      await Category.updateMany(
-        { _id: { $in: subcategories } },
-        { $push: { subcategories: categoryId } }
-      );
-    }
+    );
 
     res.status(200).json({ message: "Category updated successfully", category: updatedCategory });
   } catch (err) {
@@ -371,6 +364,7 @@ app.put("/api/edit-category/:id", async (req, res) => {
     res.status(500).json({ message: "Server error", error: err.message });
   }
 });
+
 
 
 

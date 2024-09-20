@@ -1,13 +1,14 @@
 import CubeOutline from "mdi-material-ui/CubeOutline";
 import AccountPlusOutline from "mdi-material-ui/AccountPlusOutline";
-import FormatListBulleted from "mdi-material-ui/FormatListBulleted"; // Nuevo icono para Categorías
-
+import FormatListBulleted from "mdi-material-ui/FormatListBulleted";
+import PlusBoxMultipleOutline from "mdi-material-ui/PlusBoxMultipleOutline";
 import { VerticalNavItemsType } from "src/@core/layouts/types";
+
 
 const navigation = (): VerticalNavItemsType => {
   return [
     {
-      sectionTitle: "Mi E-commerce",
+      sectionTitle: "Dashboard - Bricchi Hnos.",
     },
     {
       title: "Mis Productos",
@@ -24,6 +25,11 @@ const navigation = (): VerticalNavItemsType => {
       icon: FormatListBulleted,
       path: "/my-categories",
     },
+    {
+      title: "Añadir Categoría",
+      icon: PlusBoxMultipleOutline,
+      path: "/add-category",
+    }
   ];
 };
 

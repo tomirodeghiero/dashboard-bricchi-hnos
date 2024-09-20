@@ -6,20 +6,53 @@ import { styled } from "@mui/material/styles";
 import { Button } from "@mui/material";
 import "react-toastify/dist/ReactToastify.css";
 
-// Styled component for the triangle shaped background image
+// Styled component for product card
 const StyledCard = styled(Card)(({ theme, isSelected }) => ({
   borderRadius: theme.shape.borderRadius,
-  padding: theme.spacing(1),
+  padding: theme.spacing(2),
   position: "relative",
   backgroundColor: "#ffffff",
   transition: "transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out, border 0.3s ease-in-out",
   "&:hover": {
-    transform: "scale(1.025)",
+    transform: "scale(1.03)",
     cursor: "pointer",
+    boxShadow: "0 4px 15px rgba(0, 0, 0, 0.1)",
   },
   border: isSelected ? "2px solid #E8B600" : "2px solid transparent",
   boxShadow: isSelected ? "0 0 10px rgba(232, 182, 0, 0.5)" : "none",
+  display: "flex",
+  flexDirection: "column",
+  justifyContent: "space-between",
+  height: "100%",
 }));
+
+const ProductInfo = styled("div")({
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  textAlign: "center",
+  marginTop: "1rem",
+});
+
+const EllipsisText = styled("h3")({
+  fontWeight: "bold",
+  fontSize: "1.1rem",
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  maxWidth: "90%",
+  margin: "0 auto",
+});
+
+const CategoryText = styled("p")({
+  fontSize: "0.9rem",
+  color: "#666",
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  maxWidth: "90%",
+  marginTop: "0.5rem",
+});
 
 const MyProductsPage = () => {
   const router = useRouter();
@@ -59,29 +92,11 @@ const MyProductsPage = () => {
 
   return (
     <div>
-      <div className="flex justify-end items-center gap-4 p-4">
-        <Button
-          onClick={() => router.push("/add-product")}
-          variant="contained"
-          sx={{
-            backgroundColor: "#2a3243",
-            boxShadow: "0 1px 14px 1px #2a3243",
-            "&:hover": {
-              boxShadow: "none",
-              backgroundColor: "#2a3243",
-            },
-            marginRight: "10px",
-          }}
-        >
-          Añadir Producto
-        </Button>
-      </div>
-
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 lg:gap-6 lg:py-8">
         {loadingProducts
           ? Array.from({ length: 8 }).map((_, idx) => (
             <StyledCard key={idx}>
-              <div className="w-48 h-48 mt-5 mx-auto bg-gray-200 rounded-full"></div>
+              <div className="w-48 h-48 mt-5 mx-auto bg-gray-200 rounded-lg"></div>
               <div className="mt-5 flex flex-col items-center">
                 <div className="bg-gray-200 w-2/3 h-4 my-2 rounded"></div>
                 <div className="bg-gray-200 w-1/2 h-4 my-2 rounded"></div>
@@ -93,14 +108,15 @@ const MyProductsPage = () => {
               <img
                 src={product.mainImageUrl}
                 alt={product.name}
-                className="w-48 h-48 mt-5 mx-auto rounded-full object-cover"
+                className="w-full h-72 mt-5 mx-auto rounded-lg object-cover"
               />
-              <div className="mt-5 flex flex-col items-center">
-                <h3 className="font-bold text-[1.1rem] text-center">
-                  {product.name}
-                </h3>
-              </div>
-              <div className="mt-3 flex justify-around">
+              <ProductInfo>
+                <EllipsisText title={product.name}>{product.name}</EllipsisText>
+                <CategoryText title={product.category?.name || "Sin categoría"}>
+                  {product.category?.name || "Sin categoría"}
+                </CategoryText>
+              </ProductInfo>
+              <div className="mt-3 flex justify-around mb-4">
                 <Button
                   onClick={() => handleEdit(product._id)}
                   variant="outlined"

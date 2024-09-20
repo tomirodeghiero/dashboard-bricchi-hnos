@@ -1,9 +1,17 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import dynamic from "next/dynamic";
-import { CATEGORIES } from "src/utils/constants";
 import { toast, ToastContainer } from "react-toastify";
-import { FormControl, InputLabel, MenuItem, Select, Button } from "@mui/material";
+import {
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Select,
+  Button,
+  Card,
+  CardContent,
+  CircularProgress,
+} from "@mui/material";
 import "react-toastify/dist/ReactToastify.css";
 
 const ReactQuill = dynamic(() => import("react-quill"), { ssr: false });
@@ -14,6 +22,7 @@ const EditProductPage = () => {
 
   const [productName, setProductName] = useState("");
   const [category, setCategory] = useState("");
+  const [subCategory, setSubCategory] = useState("");
   const [specifications, setSpecifications] = useState("");
   const [technicalSheet, setTechnicalSheet] = useState<File | null>(null);
   const [manuals, setManuals] = useState<File[]>([]);
@@ -25,6 +34,25 @@ const EditProductPage = () => {
   const [existingMainImageUrl, setExistingMainImageUrl] = useState<string | null>(null);
   const [existingPreviewImagesUrls, setExistingPreviewImagesUrls] = useState<string[]>([]);
 
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  // Fetch categories and subcategories
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch("/api/categories");
+        const data = await response.json();
+        setCategories(data.categories); // Set categories with subcategories included
+      } catch (error) {
+        console.error("Error fetching categories:", error);
+      }
+    };
+
+    fetchCategories();
+  }, []);
+
+  // Fetch product data when id is available
   useEffect(() => {
     if (id) {
       const fetchProduct = async () => {
@@ -33,9 +61,9 @@ const EditProductPage = () => {
           if (response.ok) {
             const data = await response.json();
             setProductName(data.name);
-            setCategory(data.category);
+            setCategory(data.category?._id); // Ensure category ID is set correctly
+            setSubCategory(data.subCategory?._id || ""); // Ensure subcategory ID is set correctly
             setSpecifications(data.specifications);
-
             setExistingMainImageUrl(data.mainImageUrl);
             setExistingPreviewImagesUrls(data.secondaryImageUrls || []);
             setExistingTechnicalSheetUrl(data.technical_sheet?.url || null);
@@ -53,10 +81,12 @@ const EditProductPage = () => {
 
   const handleSubmitProduct = async (e: any) => {
     e.preventDefault();
+    setLoading(true);
 
     const formData = new FormData();
     formData.append("name", productName);
     formData.append("category", category);
+    if (subCategory) formData.append("subCategory", subCategory);
     formData.append("specifications", specifications);
 
     if (technicalSheet) {
@@ -90,6 +120,8 @@ const EditProductPage = () => {
     } catch (error) {
       console.error("Error al editar el producto:", error);
       toast.error("Error inesperado", { position: "top-center" });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -100,128 +132,151 @@ const EditProductPage = () => {
 
   return (
     <>
-      <div className="lg:flex w-full gap-8">
-        <div className="w-full lg:1/2">
-          <p className="uppercase font-medium text-sm text-gray-500">✏️ ¡Editar producto!</p>
-
-          <input
-            className="text-gray-800 px-2 h-14 bg-gray-200 mt-1 text-4xl w-full font-medium"
-            value={productName}
-            placeholder="Nombre del producto"
-            onChange={(e) => setProductName(e.target.value)}
-          />
-
-          <div className="mt-5">
+      <div className="flex justify-center items-center w-full py-12">
+        <Card className="shadow-lg w-full max-w-7xl">
+          <CardContent>
+            <p className="uppercase font-medium text-lg text-gray-500 mb-6">
+              ✏️ ¡Editar producto!
+            </p>
+            <input
+              className="text-gray-800 px-3 h-16 bg-gray-200 mt-2 mb-5 text-2xl w-full font-medium border-b-2 border-gray-300 focus:border-blue-500 transition"
+              value={productName}
+              placeholder="Nombre del producto"
+              onChange={(e) => setProductName(e.target.value)}
+            />
             <FormControl variant="outlined" fullWidth>
               <InputLabel>Categoría</InputLabel>
-              <Select
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                label="Categoría"
-              >
-                {CATEGORIES.map((categoryOption, index) => (
-                  <MenuItem key={index} value={categoryOption}>
-                    {categoryOption}
+              <Select value={category} onChange={(e) => setCategory(e.target.value)} label="Categoría">
+                {categories.map((categoryOption) => (
+                  <MenuItem key={categoryOption._id} value={categoryOption._id}>
+                    {categoryOption.name}
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
-          </div>
 
-          <div className="mt-5">
-            <ReactQuill value={specifications} onChange={setSpecifications} />
-          </div>
-
-          <div className="mt-5">
-            {existingTechnicalSheetUrl ? (
-              <a href={existingTechnicalSheetUrl} target="_blank" rel="noopener noreferrer">
-                Ver ficha técnica actual
-              </a>
-            ) : (
-              "No hay ficha técnica subida."
+            {/* Subcategories dropdown only shown if category has subcategories */}
+            {category && categories.find((cat) => cat._id === category)?.subcategories?.length > 0 && (
+              <FormControl variant="outlined" fullWidth className="mt-8">
+                <InputLabel>Subcategoría</InputLabel>
+                <Select value={subCategory} onChange={(e) => setSubCategory(e.target.value)} label="Subcategoría">
+                  {categories
+                    .find((cat) => cat._id === category)
+                    ?.subcategories.map((subCat) => (
+                      <MenuItem key={subCat._id} value={subCat._id}>
+                        {subCat.name}
+                      </MenuItem>
+                    ))}
+                </Select>
+              </FormControl>
             )}
-            <input
-              type="file"
-              onChange={handleFileChange(setTechnicalSheet)}
-              accept="application/pdf"
-              className="hidden"
-              id="technicalSheet"
-            />
-            <label htmlFor="technicalSheet" className="bg-gray-200 px-4 py-2 rounded cursor-pointer">
-              Subir nueva Ficha Técnica (PDF)
-            </label>
-          </div>
 
-          <div className="mt-5">
-            {existingManualUrls.length > 0 ? (
-              <div>
-                {existingManualUrls.map((manualUrl, index) => (
-                  <a key={index} href={manualUrl} target="_blank" rel="noopener noreferrer">
-                    Ver manual {index + 1}
+            <div className="mt-8">
+              <ReactQuill value={specifications} onChange={setSpecifications} />
+            </div>
+
+            <div className="mt-8">
+              <Button variant="contained" component="label">
+                Subir Imagen Principal
+                <input type="file" onChange={handleFileChange(setMainImageUrl)} hidden />
+              </Button>
+              {existingMainImageUrl && !mainImageUrl && (
+                <div className="mt-4">
+                  <img
+                    src={existingMainImageUrl}
+                    alt="Imagen Principal Actual"
+                    className="object-cover h-28 w-28 rounded mt-2"
+                  />
+                </div>
+              )}
+              {mainImageUrl && (
+                <div className="mt-4">
+                  <img
+                    src={URL.createObjectURL(mainImageUrl)}
+                    alt="Nueva Imagen Principal"
+                    className="object-cover h-28 w-28 rounded mt-2"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="mt-8">
+              <Button variant="contained" component="label">
+                Subir Imágenes Secundarias
+                <input type="file" multiple onChange={handleFileChange(setPreviewImages)} hidden />
+              </Button>
+              {existingPreviewImagesUrls.length > 0 && !previewImages.length && (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 w-full mt-4">
+                  {existingPreviewImagesUrls.map((url, index) => (
+                    <img key={index} src={url} alt={`Imagen Secundaria ${index}`} className="object-cover h-full w-full rounded" />
+                  ))}
+                </div>
+              )}
+              {previewImages.length > 0 && (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 w-full mt-4">
+                  {previewImages.map((previewImage, index) => (
+                    <div key={index}>
+                      <img
+                        src={URL.createObjectURL(previewImage)}
+                        alt={`Secundaria ${index}`}
+                        className="object-cover h-full w-full rounded"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4">
+              <Button variant="contained" component="label">
+                Subir Ficha Técnica (PDF)
+                <input type="file" onChange={handleFileChange(setTechnicalSheet)} accept="application/pdf" hidden />
+              </Button>
+              {existingTechnicalSheetUrl && !technicalSheet && (
+                <p className="mt-2">
+                  <a href={existingTechnicalSheetUrl} target="_blank" rel="noopener noreferrer">
+                    Ver ficha técnica actual
                   </a>
-                ))}
-              </div>
-            ) : (
-              "No hay manuales subidos."
-            )}
-            <input
-              type="file"
-              multiple
-              onChange={handleFileChange(setManuals)}
-              accept="application/pdf"
-              className="hidden"
-              id="manualFiles"
-            />
-            <label htmlFor="manualFiles" className="bg-gray-200 px-4 py-2 rounded cursor-pointer">
-              Subir nuevos Manuales (PDF)
-            </label>
-          </div>
+                </p>
+              )}
+              {technicalSheet && <p className="mt-2 text-gray-600">Archivo subido: {technicalSheet.name}</p>}
+            </div>
 
-          <div className="mt-5">
-            {existingMainImageUrl && (
-              <img src={existingMainImageUrl} alt="Imagen principal actual" className="w-48 h-48 mt-5 mx-auto rounded" />
-            )}
-            <input
-              type="file"
-              onChange={handleFileChange(setMainImageUrl)}
-              accept="image/*"
-              className="hidden"
-              id="mainImage"
-            />
-            <label htmlFor="mainImage" className="bg-gray-200 px-4 py-2 rounded cursor-pointer">
-              Subir nueva Imagen Principal
-            </label>
-          </div>
+            <div className="mt-8">
+              <Button variant="contained" component="label">
+                Subir Manuales (PDF)
+                <input type="file" multiple onChange={handleFileChange(setManuals)} accept="application/pdf" hidden />
+              </Button>
+              {existingManualUrls.length > 0 && !manuals.length && (
+                <ul className="mt-2">
+                  {existingManualUrls.map((manualUrl, index) => (
+                    <li key={index}>
+                      <a href={manualUrl} target="_blank" rel="noopener noreferrer">
+                        Ver manual {index + 1}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {manuals.length > 0 && (
+                <ul className="mt-2">
+                  {manuals.map((manual, index) => (
+                    <li key={index} className="text-gray-600">
+                      {manual.name}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
 
-          <div className="mt-5">
-            {existingPreviewImagesUrls.length > 0 && (
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 w-full mt-4">
-                {existingPreviewImagesUrls.map((url, index) => (
-                  <img key={index} src={url} alt={`Imagen secundaria ${index}`} className="object-cover h-full w-full rounded" />
-                ))}
-              </div>
-            )}
-            <input
-              type="file"
-              multiple
-              onChange={handleFileChange(setPreviewImages)}
-              accept="image/*"
-              className="hidden"
-              id="secondaryImages"
-            />
-            <label htmlFor="secondaryImages" className="bg-gray-200 px-4 py-2 rounded cursor-pointer">
-              Subir nuevas Imágenes Secundarias
-            </label>
-          </div>
-
-          <div className="w-full lg:1/2 mt-4">
-            <Button onClick={handleSubmitProduct} variant="contained">
-              Editar Producto
-            </Button>
-          </div>
-        </div>
+            <div className="w-full mt-8">
+              <Button onClick={handleSubmitProduct} variant="contained" disabled={loading} className="w-full">
+                {loading ? <CircularProgress size={24} /> : "Editar Producto"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
-
       <ToastContainer position="top-right" autoClose={5000} />
     </>
   );
