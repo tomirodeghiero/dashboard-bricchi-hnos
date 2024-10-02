@@ -46,7 +46,7 @@ const CategoryCard = ({ category, label, onEdit, onDelete }) => (
       <Button
         variant="outlined"
         startIcon={<EditIcon />}
-        onClick={() => onEdit(category._id)}
+        onClick={() => onEdit(category._id, label)}
         color="primary"
         size="small"
         style={{ marginRight: "8px" }}
@@ -87,9 +87,12 @@ const MyCategoriesPage = () => {
     setLoadingCategories(false);
   };
 
-  const handleDelete = async (categoryId) => {
+  const handleDelete = async (categoryId, categoryType, parentCategoryId) => {
     if (confirm("¿Estás seguro de que deseas eliminar esta categoría y todo lo relacionado?")) {
-      const response = await fetch(`/api/delete-category/${categoryId}`, { method: "DELETE" });
+      // Construir la URL con los parámetros necesarios
+      const response = await fetch(`/api/delete-category/${categoryId}?categoryType=${categoryType}&parentCategory=${parentCategoryId}`, {
+        method: "DELETE",
+      });
       if (response.ok) {
         toast.success("Categoría eliminada correctamente", { position: "top-center" });
         fetchCategories();
@@ -99,9 +102,19 @@ const MyCategoriesPage = () => {
     }
   };
 
-  const handleEdit = (categoryId) => {
-    router.push(`/edit-category/${categoryId}`);
+  const handleEdit = (categoryId, categoryType, mainCategoryId, parentCategoryId) => {
+    // Redirigir a la página de edición con los parámetros adecuados
+    router.push({
+      pathname: `/edit-category/${categoryId}`,
+      query: {
+        categoryType,
+        mainCategoryId: mainCategoryId || null, // Pasar el ID de la categoría principal si existe
+        parentCategory: parentCategoryId || null, // Pasar el ID de la categoría padre si existe
+        isMainCategory: categoryType === 'main', // Establecer si es una categoría principal
+      },
+    });
   };
+
 
   // Renderizar la categoría principal con sus marcas y subcategorías
   const renderCategoryTree = (category) => {
@@ -116,7 +129,7 @@ const MyCategoriesPage = () => {
           <CategoryCard
             category={category}
             label={category.isMainCategory ? "Categoría Principal" : "Marca"}
-            onEdit={handleEdit}
+            onEdit={() => handleEdit(category._id, category.isMainCategory ? "main" : "brand", category._id)}
             onDelete={handleDelete}
           />
           {/* Renderizar las marcas */}
@@ -132,8 +145,8 @@ const MyCategoriesPage = () => {
                     <CategoryCard
                       category={subCategory}
                       label="Marca"
-                      onEdit={handleEdit}
-                      onDelete={handleDelete}
+                      onEdit={() => handleEdit(subCategory._id, "brand", category._id)} // Aquí pasamos el `mainCategoryId`
+                      onDelete={() => handleDelete(subCategory._id, "brand", category._id)} // Aquí también pasamos el `mainCategoryId`
                     />
                     {/* Renderizar las sub-subcategorías */}
                     {subCategory.subcategories && subCategory.subcategories.length > 0 && (
@@ -144,8 +157,8 @@ const MyCategoriesPage = () => {
                             key={subSubCategory._id}
                             category={subSubCategory}
                             label="Subcategoría"
-                            onEdit={handleEdit}
-                            onDelete={handleDelete}
+                            onEdit={() => handleEdit(subSubCategory._id, "subcategory", category._id, subCategory._id)} // Pasamos el `mainCategoryId` y `parentCategoryId`
+                            onDelete={() => handleDelete(subSubCategory._id, "subcategory", subCategory._id)} // Pasamos el `parentCategoryId`
                           />
                         ))}
                       </Box>
@@ -159,6 +172,7 @@ const MyCategoriesPage = () => {
       </Accordion>
     );
   };
+
 
   return (
     <Box p={3}>

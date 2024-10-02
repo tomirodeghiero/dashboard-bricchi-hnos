@@ -8,22 +8,42 @@ const EditCategoryPage = () => {
   const [categoryName, setCategoryName] = useState("");
   const [allCategories, setAllCategories] = useState([]);
   const [selectedSubcategories, setSelectedSubcategories] = useState([]);
-  const [isMainCategory, setIsMainCategory] = useState(true); // Cargar si es una categoría principal
+  const [isMainCategory, setIsMainCategory] = useState(true);
+  const [selectedParentCategory, setSelectedParentCategory] = useState("");
+  const [selectedCategoryType, setSelectedCategoryType] = useState("");
   const [loading, setLoading] = useState(true);
   const router = useRouter();
-  const { id } = router.query;
+  const { id, categoryType, mainCategoryId, parentCategory, isMainCategory: queryIsMainCategory } = router.query;
 
   useEffect(() => {
     if (id) {
       const fetchCategory = async () => {
         try {
-          const categoryResponse = await fetch(`/api/category/${id}`);
-          const categoryData = await categoryResponse.json();
+          let categoryResponse;
+          let categoryData;
+
+          // Determinar el tipo de categoría (mainCategory, brand, subcategory)
+          if (categoryType === "main") {
+            categoryResponse = await fetch(`/api/category/${id}`);
+            categoryData = await categoryResponse.json();
+            setIsMainCategory(true);
+          } else if (categoryType === "brand") {
+            categoryResponse = await fetch(`/api/brand/${id}`);
+            categoryData = await categoryResponse.json();
+            setIsMainCategory(false);
+            setSelectedCategoryType("brand");
+            setSelectedParentCategory(mainCategoryId);
+          } else if (categoryType === "subcategory") {
+            categoryResponse = await fetch(`/api/subcategory/${id}`);
+            categoryData = await categoryResponse.json();
+            setIsMainCategory(false);
+            setSelectedCategoryType("subcategory");
+            setSelectedParentCategory(parentCategory);
+          }
 
           setCategoryName(categoryData.category.name);
-          setSelectedSubcategories(categoryData.category.subcategories.map(sub => sub._id));
-          setIsMainCategory(categoryData.category.isMainCategory); // Cargar el valor de "isMainCategory"
 
+          // Obtener todas las categorías para las opciones del formulario
           const categoriesResponse = await fetch("/api/categories");
           const categoriesData = await categoriesResponse.json();
           setAllCategories(categoriesData.categories);
@@ -38,7 +58,7 @@ const EditCategoryPage = () => {
 
       fetchCategory();
     }
-  }, [id]);
+  }, [id, categoryType, mainCategoryId, parentCategory]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -46,11 +66,17 @@ const EditCategoryPage = () => {
       return toast.error("El nombre de la categoría está vacío", { position: "top-center" });
     }
 
+    // Construir el objeto de datos para la solicitud
     const categoryData = {
       name: categoryName,
-      subcategories: selectedSubcategories,
-      isMainCategory, // Enviar si es categoría principal o no
+      subcategories: isMainCategory ? selectedSubcategories : [],
+      isMainCategory,
+      parentCategory: !isMainCategory ? selectedParentCategory : null,
+      categoryType: !isMainCategory ? selectedCategoryType : null,
+      mainCategoryId: !isMainCategory ? mainCategoryId : null, // Incluir el `mainCategoryId` si no es una categoría principal
     };
+
+    console.log("Datos enviados:", categoryData);
 
     const response = await fetch(`/api/edit-category/${id}`, {
       method: "PUT",
@@ -70,7 +96,7 @@ const EditCategoryPage = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-screen">
+      <div className="p-4 flex justify-center items-center h-screen">
         <CircularProgress />
       </div>
     );
@@ -89,36 +115,80 @@ const EditCategoryPage = () => {
           />
         </div>
 
-        <div className="mt-4">
-          <FormControl fullWidth variant="outlined">
-            <InputLabel>Subcategorías</InputLabel>
-            <Select
-              multiple
-              value={selectedSubcategories}
-              onChange={(e) => setSelectedSubcategories(e.target.value)}
-              label="Subcategorías"
-            >
-              {allCategories.map((category) => (
-                <MenuItem key={category._id} value={category._id}>
-                  {category.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </div>
+        {isMainCategory && (
+          <div className="mt-4">
+            <FormControl fullWidth variant="outlined">
+              <InputLabel>Subcategorías</InputLabel>
+              <Select
+                multiple
+                value={selectedSubcategories}
+                onChange={(e) => setSelectedSubcategories(e.target.value)}
+                label="Subcategorías"
+              >
+                {allCategories.map((category) => (
+                  <MenuItem key={category._id} value={category._id}>
+                    {category.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </div>
+        )}
 
-        {/* Checkbox para seleccionar si es una categoría principal */}
         <div className="mt-4">
           <FormControlLabel
             control={
               <Checkbox
                 checked={isMainCategory}
-                onChange={(e) => setIsMainCategory(e.target.checked)}
+                onChange={(e) => {
+                  setIsMainCategory(e.target.checked);
+                  if (e.target.checked) {
+                    setSelectedParentCategory("");
+                    setSelectedCategoryType("");
+                  }
+                }}
               />
             }
             label="¿Es una categoría principal?"
           />
         </div>
+
+        {!isMainCategory && (
+          <>
+            <div className="mt-4">
+              <FormControl fullWidth variant="outlined">
+                <InputLabel>Tipo de Categoría</InputLabel>
+                <Select
+                  value={selectedCategoryType}
+                  onChange={(e) => setSelectedCategoryType(e.target.value)}
+                  label="Tipo de Categoría"
+                >
+                  <MenuItem value="brand">Marca</MenuItem>
+                  <MenuItem value="subcategory">Subcategoría</MenuItem>
+                </Select>
+              </FormControl>
+            </div>
+
+            <div className="mt-4">
+              <FormControl fullWidth variant="outlined">
+                <InputLabel>Categoría Padre</InputLabel>
+                <Select
+                  value={selectedParentCategory}
+                  onChange={(e) => setSelectedParentCategory(e.target.value)}
+                  label="Categoría Padre"
+                >
+                  {allCategories
+                    .filter(category => category.isMainCategory)
+                    .map((category) => (
+                      <MenuItem key={category._id} value={category._id}>
+                        {category.name}
+                      </MenuItem>
+                    ))}
+                </Select>
+              </FormControl>
+            </div>
+          </>
+        )}
 
         <div className="mt-4">
           <Button type="submit" variant="contained" fullWidth>

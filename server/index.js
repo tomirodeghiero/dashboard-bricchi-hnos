@@ -12,6 +12,10 @@ const Product = require("./models/Product");
 const { Category, SubCategory, SubSubCategory } = require('./models/Category');
 const app = express();
 
+app.use(express.json()); // Debe estar antes de las rutas
+app.use(cookieParser());
+app.use(morgan("dev"));
+
 mongoose.set("strictQuery", false);
 
 cloudinary.config({
@@ -45,9 +49,7 @@ app.use(
     origin: ["https://server-dashboardbricchihnos.vercel.app", "https://www.bricchihnos.com", "http://localhost:3000", "http://localhost:3001", process.env.FRONTEND_PUBLIC_URL],
   })
 );
-app.use(express.json());
-app.use(cookieParser());
-app.use(morgan("dev"));
+
 
 mongoose.connect(process.env.DB_HOST, {
   useNewUrlParser: true,
@@ -202,32 +204,103 @@ app.post("/api/add-product", uploadMiddleware, async (req, res) => {
   }
 });
 
-
-
-
-// PUT - Update a product by ID
-app.put("/api/edit-product/:id", uploadMiddleware, async (req, res) => {
+// GET - Obtener una marca específica por ID
+app.get("/api/brand/:id", async (req, res) => {
   try {
-    const productId = req.params.id;
-    const updatedFields = req.body;
+    const brand = await SubCategory.findById(req.params.id).populate('subcategories');
 
-    // Handle images if they exist
-    if (req.files && req.files["images"] && req.files["images"].length > 0) {
-      updatedFields.mainImageUrl = req.files["images"][0]?.path || "";
-      updatedFields.secondaryImageUrls = req.files["images"]
-        .slice(1)
-        .map((file) => file.path);
+    if (!brand) {
+      return res.status(404).json({ message: "Marca no encontrada" });
     }
 
-    const product = await Product.findByIdAndUpdate(productId, updatedFields, { new: true });
-    if (!product) {
-      return res.status(404).json({ message: "Product not found" });
-    }
-
-    res.status(200).json({ message: "Product updated successfully", product });
+    res.status(200).json({ category: brand });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
+    console.error("Error fetching brand:", err);
+    res.status(500).json({ message: "Error en el servidor", error: err.message });
+  }
+});
+
+// GET - Obtener una subcategoría específica por ID
+app.get("/api/subcategory/:id", async (req, res) => {
+  try {
+    const subcategory = await SubSubCategory.findById(req.params.id);
+
+    if (!subcategory) {
+      return res.status(404).json({ message: "Subcategoría no encontrada" });
+    }
+
+    res.status(200).json({ category: subcategory });
+  } catch (err) {
+    console.error("Error fetching subcategory:", err);
+    res.status(500).json({ message: "Error en el servidor", error: err.message });
+  }
+});
+
+
+// PUT - Actualizar una categoría por ID
+app.put("/api/edit-category/:id", async (req, res) => {
+  try {
+    const { name, isMainCategory, parentCategory, categoryType, mainCategoryId } = req.body;
+
+    console.log("Body:", req.body);
+
+    // Validar nombre de la categoría
+    if (!name || name.trim() === "") {
+      return res.status(400).json({ message: "El nombre de la categoría es obligatorio." });
+    }
+
+    let updatedCategory;
+
+    // Lógica para categorías no principales
+    if (!isMainCategory) {
+      if (!parentCategory || !mainCategoryId) {
+        return res.status(400).json({ message: "Categoría padre o ID de categoría principal no especificado." });
+      }
+
+      if (categoryType === "brand") {
+        // Actualizar una marca dentro de la categoría principal
+        updatedCategory = await SubCategory.findByIdAndUpdate(
+          req.params.id,
+          { name },
+          { new: true }
+        );
+
+        // Verificar si la marca está correctamente asociada a la categoría principal
+        const mainCategory = await Category.findById(mainCategoryId);
+        if (mainCategory && !mainCategory.subcategories.includes(updatedCategory._id)) {
+          mainCategory.subcategories.push(updatedCategory._id);
+          await mainCategory.save();
+        }
+      } else if (categoryType === "subcategory") {
+        // Actualizar una subcategoría dentro de una marca específica
+        updatedCategory = await SubSubCategory.findByIdAndUpdate(
+          req.params.id,
+          { name },
+          { new: true }
+        );
+
+        // Verificar si la subcategoría está correctamente asociada a la marca padre
+        const parentBrand = await SubCategory.findById(parentCategory);
+        if (parentBrand && !parentBrand.subcategories.includes(updatedCategory._id)) {
+          parentBrand.subcategories.push(updatedCategory._id);
+          await parentBrand.save();
+        }
+      } else {
+        return res.status(400).json({ message: "Tipo de categoría inválido." });
+      }
+    } else {
+      // Actualizar una categoría principal
+      updatedCategory = await Category.findByIdAndUpdate(
+        req.params.id,
+        { name, isMainCategory: true },
+        { new: true }
+      );
+    }
+
+    res.status(200).json({ message: "Categoría actualizada con éxito", category: updatedCategory });
+  } catch (err) {
+    console.error("Error actualizando categoría:", err);
+    res.status(500).json({ message: "Error en el servidor", error: err.message });
   }
 });
 
@@ -264,33 +337,33 @@ app.get("/api/category/:id", async (req, res) => {
 });
 
 
-// DELETE - Eliminar una categoría y todas sus subcategorías
+// DELETE - Eliminar una categoría por ID
 app.delete("/api/delete-category/:id", async (req, res) => {
   try {
-    const categoryId = req.params.id;
+    const { categoryType, parentCategory } = req.query;
 
-    // Función recursiva para eliminar una categoría y todas sus subcategorías
-    const deleteCategoryRecursively = async (categoryId) => {
-      const category = await Category.findById(categoryId).populate('subcategories');
-
-      // Verificar si la categoría existe antes de intentar acceder a sus subcategorías
-      if (!category) {
-        console.warn(`Categoría con ID ${categoryId} no encontrada.`);
-        return;
+    if (categoryType === "brand") {
+      // Eliminar marca
+      const brand = await SubCategory.findByIdAndRemove(req.params.id);
+      if (!brand) {
+        return res.status(404).json({ message: "Marca no encontrada." });
       }
 
-      // Si tiene subcategorías, eliminarlas de forma recursiva
-      if (category.subcategories && category.subcategories.length > 0) {
-        for (let subCategory of category.subcategories) {
-          await deleteCategoryRecursively(subCategory._id); // Eliminar subcategoría recursivamente
-        }
+      // Remover la marca de la categoría principal
+      await Category.findByIdAndUpdate(parentCategory, { $pull: { subcategories: req.params.id } });
+    } else if (categoryType === "subcategory") {
+      // Eliminar subcategoría
+      const subcategory = await SubSubCategory.findByIdAndRemove(req.params.id);
+      if (!subcategory) {
+        return res.status(404).json({ message: "Subcategoría no encontrada." });
       }
 
-      // Finalmente, eliminar la categoría principal
-      await Category.findByIdAndRemove(categoryId);
-    };
-
-    await deleteCategoryRecursively(categoryId); // Eliminar categoría de forma recursiva
+      // Remover la subcategoría de la marca padre
+      await SubCategory.findByIdAndUpdate(parentCategory, { $pull: { subcategories: req.params.id } });
+    } else {
+      // Eliminar una categoría principal
+      await Category.findByIdAndRemove(req.params.id);
+    }
 
     res.status(200).json({ message: "Categoría eliminada con éxito" });
   } catch (err) {
@@ -298,6 +371,7 @@ app.delete("/api/delete-category/:id", async (req, res) => {
     res.status(500).json({ message: "Error en el servidor", error: err.message });
   }
 });
+
 
 
 
@@ -438,24 +512,70 @@ app.get("/api/categories", async (req, res) => {
 // PUT - Actualizar una categoría por ID
 app.put("/api/edit-category/:id", async (req, res) => {
   try {
-    const { name, subcategories, isMainCategory } = req.body;
+    const { name, isMainCategory, parentCategory, categoryType, mainCategoryId } = req.body;
 
-    const updatedCategory = await Category.findByIdAndUpdate(
-      req.params.id,
-      {
-        name,
-        subcategories: subcategories || [],
-        isMainCategory: isMainCategory,
-      },
-      { new: true }
-    );
+    console.log("Body:", req.body);
 
-    res.status(200).json({ message: "Category updated successfully", category: updatedCategory });
+    // Validar nombre de la categoría
+    if (!name || name.trim() === "") {
+      return res.status(400).json({ message: "El nombre de la categoría es obligatorio." });
+    }
+
+    let updatedCategory;
+
+    // Lógica para categorías no principales
+    if (!isMainCategory) {
+      if (!parentCategory || !mainCategoryId) {
+        return res.status(400).json({ message: "Categoría padre o ID de categoría principal no especificado." });
+      }
+
+      if (categoryType === "brand") {
+        // Actualizar una marca dentro de la categoría principal
+        updatedCategory = await SubCategory.findByIdAndUpdate(
+          req.params.id,
+          { name },
+          { new: true }
+        );
+
+        // Verificar si la marca está correctamente asociada a la categoría principal
+        const mainCategory = await Category.findById(mainCategoryId);
+        if (mainCategory && !mainCategory.subcategories.includes(updatedCategory._id)) {
+          mainCategory.subcategories.push(updatedCategory._id);
+          await mainCategory.save();
+        }
+      } else if (categoryType === "subcategory") {
+        // Actualizar una subcategoría dentro de una marca específica
+        updatedCategory = await SubSubCategory.findByIdAndUpdate(
+          req.params.id,
+          { name },
+          { new: true }
+        );
+
+        // Verificar si la subcategoría está correctamente asociada a la marca padre
+        const parentBrand = await SubCategory.findById(parentCategory);
+        if (parentBrand && !parentBrand.subcategories.includes(updatedCategory._id)) {
+          parentBrand.subcategories.push(updatedCategory._id);
+          await parentBrand.save();
+        }
+      } else {
+        return res.status(400).json({ message: "Tipo de categoría inválido." });
+      }
+    } else {
+      // Actualizar una categoría principal
+      updatedCategory = await Category.findByIdAndUpdate(
+        req.params.id,
+        { name, isMainCategory: true },
+        { new: true }
+      );
+    }
+
+    res.status(200).json({ message: "Categoría actualizada con éxito", category: updatedCategory });
   } catch (err) {
-    console.error("Error updating category:", err);
-    res.status(500).json({ message: "Server error", error: err.message });
+    console.error("Error actualizando categoría:", err);
+    res.status(500).json({ message: "Error en el servidor", error: err.message });
   }
 });
+
 
 // Listen port
 app.listen(5001, () => {

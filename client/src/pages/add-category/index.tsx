@@ -148,23 +148,25 @@ const AddCategoryPage = () => {
                   </Select>
                 </FormControl>
 
-                <FormControl fullWidth variant="outlined" className="mt-4">
-                  <InputLabel>Marca</InputLabel>
-                  <Select
-                    value={selectedBrand}
-                    onChange={(e) => setSelectedBrand(e.target.value)}
-                    label="Marca"
-                  >
-                    {allCategories
-                      .filter((category) => category._id === selectedParentCategory)
-                      .flatMap((category) => category.subcategories)
-                      .map((subCategory) => (
-                        <MenuItem key={subCategory._id} value={subCategory._id}>
-                          {subCategory.name}
-                        </MenuItem>
-                      ))}
-                  </Select>
-                </FormControl>
+                <Box className="my-4">
+                  <FormControl fullWidth variant="outlined" className="mt-4">
+                    <InputLabel>Marca</InputLabel>
+                    <Select
+                      value={selectedBrand}
+                      onChange={(e) => setSelectedBrand(e.target.value)}
+                      label="Marca"
+                    >
+                      {allCategories
+                        .filter((category) => category._id === selectedParentCategory)
+                        .flatMap((category) => category.subcategories)
+                        .map((subCategory) => (
+                          <MenuItem key={subCategory._id} value={subCategory._id}>
+                            {subCategory.name}
+                          </MenuItem>
+                        ))}
+                    </Select>
+                  </FormControl>
+                </Box>
               </>
             )}
           </>
