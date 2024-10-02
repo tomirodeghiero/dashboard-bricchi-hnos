@@ -107,22 +107,25 @@ app.get("/api/product/:id", async (req, res) => {
   try {
     const product = await Product.findById(req.params.id)
       .populate("category", "name")
-      .populate("brand", "name subSubCategories")
-      .populate("subCategory", "name");
+      .populate({
+        path: "brand",
+        select: "name subSubCategories",
+        populate: {
+          path: "subSubCategories",
+          model: "SubSubCategory",
+        },
+      })
+      .populate({
+        path: "subCategory",
+        select: "name",
+      });
 
     console.log("product:", product);
-
 
     if (!product) {
       return res.status(404).json({ message: "Product not found" });
     }
 
-    // Obtener las sub-subcategorías de la marca
-    const brandSubSubcategories = await SubSubCategory.find({ _id: { $in: product.brand.subSubCategories } });
-    console.log("brandSubSubcategories:", brandSubSubcategories);
-    // Obtener la subcategoría correspondiente a la marca seleccionada
-    const selectedSubCategory = await SubCategory.findById(product.subCategory).populate('subSubCategories');
-    console.log("selectedSubCategory:", selectedSubCategory);
     // Estructurar la respuesta
     const response = {
       name: product.name,
@@ -130,9 +133,9 @@ app.get("/api/product/:id", async (req, res) => {
       brand: product.brand ? {
         _id: product.brand._id,
         name: product.brand.name,
-        subSubCategories: brandSubSubcategories // Aquí se incluyen las sub-subcategorías de la marca
+        subSubCategories: product.brand.subSubCategories // Aquí se incluyen las sub-subcategorías de la marca
       } : null,
-      subCategory: selectedSubCategory ? { _id: selectedSubCategory._id, name: selectedSubCategory.name, subSubCategories: selectedSubCategory.subSubCategories } : null, // Aquí se incluye la subcategoría con sus sub-subcategorías
+      subCategory: product.subCategory ? { _id: product.subCategory._id, name: product.subCategory.name, subSubCategories: product.subCategory.subSubCategories } : null,
       specifications: product.specifications,
       mainImageUrl: product.mainImageUrl,
       secondaryImageUrls: product.secondaryImageUrls || [],
@@ -156,6 +159,7 @@ app.get("/api/product/:id", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+
 
 // POST - Add a new product
 app.post("/api/add-product", uploadMiddleware, async (req, res) => {
@@ -215,8 +219,20 @@ app.post("/api/add-product", uploadMiddleware, async (req, res) => {
     // Recuperar el producto para asegurarse que la subcategoría esté correctamente guardada
     const savedProduct = await Product.findById(product._id)
       .populate("category", "name")
-      .populate("brand", "name subSubCategories")
-      .populate("subCategory", "name");
+      .populate({
+        path: "brand",
+        select: "name subSubCategories",
+        populate: {
+          path: "subSubCategories",
+          model: "SubSubCategory",
+        },
+      })
+      .populate({
+        path: "subCategory",
+        select: "name",
+      });
+
+    console.log("Producto guardado con las referencias:", savedProduct);
 
     res.status(200).json({ message: "Producto agregado exitosamente", product: savedProduct });
   } catch (err) {

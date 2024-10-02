@@ -14,7 +14,7 @@ const subCategorySchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  subSubCategories: [{ // Asegúrate de que el campo esté correctamente nombrado
+  subSubCategories: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'SubSubCategory',
   }],
