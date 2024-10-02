@@ -1,16 +1,14 @@
 const mongoose = require('mongoose');
+const Schema = mongoose.Schema;
 
-const productSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: true,
-  },
-  description: String,
-  category: { type: mongoose.Schema.Types.ObjectId, ref: 'Category' },
-  subCategory: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', default: null },
+const productSchema = new Schema({
+  name: { type: String, required: true },
+  category: { type: Schema.Types.ObjectId, ref: 'Category' },
+  subCategory: { type: Schema.Types.ObjectId, ref: 'SubCategory' },
+  brand: { type: Schema.Types.ObjectId, ref: 'SubCategory' },
+  specifications: String,
   mainImageUrl: String,
   secondaryImageUrls: [String],
-  specifications: String,
   technical_sheet: {
     file_name: String,
     url: String,
@@ -21,12 +19,7 @@ const productSchema = new mongoose.Schema({
       url: String,
     },
   ],
-  category: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Category'
-  },
 });
 
-const Product = mongoose.model("Product", productSchema);
 
-module.exports = Product;
+module.exports = mongoose.model('Product', productSchema);

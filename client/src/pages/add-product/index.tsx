@@ -20,8 +20,8 @@ const ReactQuill = dynamic(() => import("react-quill"), { ssr: false });
 const AddProductPage = () => {
   const [productName, setProductName] = useState("");
   const [category, setCategory] = useState("");
-  const [brand, setBrand] = useState(""); // Used for the brand selection
-  const [subCategory, setSubCategory] = useState(""); // Subcategory within the selected brand
+  const [brand, setBrand] = useState("");
+  const [subCategory, setSubCategory] = useState("");
   const [specifications, setSpecifications] = useState("");
   const [technicalSheet, setTechnicalSheet] = useState<File | null>(null);
   const [manuals, setManuals] = useState<File[]>([]);
@@ -30,6 +30,9 @@ const AddProductPage = () => {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const formRef = useRef(null);
+
+  // Estado para almacenar las subcategorías
+  const [subCategories, setSubCategories] = useState([]);
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -45,30 +48,27 @@ const AddProductPage = () => {
     fetchCategories();
   }, []);
 
-  const showErrorMessage = (message: string) => {
-    toast.error(message, {
-      position: "top-center",
-      autoClose: 5000,
-      hideProgressBar: false,
-      closeOnClick: true,
-      pauseOnHover: true,
-      draggable: true,
-      progress: undefined,
-      theme: "light",
-    });
+  const showErrorMessage = (message) => {
+    toast.error(message, { position: "top-center", autoClose: 5000 });
   };
 
   const handleSubmitProduct = async (e) => {
     e.preventDefault();
     setLoading(true);
-    if (!productName) return showErrorMessage("El nombre del producto está vacío");
+
+    if (!productName) {
+      showErrorMessage("El nombre del producto está vacío");
+      setLoading(false);
+      return;
+    }
 
     const formData = new FormData();
     formData.append("name", productName);
     if (category) formData.append("category", category);
-    if (brand) formData.append("brand", brand); // Include the selected brand
-    if (subCategory) formData.append("subCategory", subCategory); // Include the selected subcategory within the brand
+    if (brand) formData.append("brand", brand);
+    if (subCategory) formData.append("subCategory", subCategory);
     formData.append("specifications", specifications || "");
+
     if (technicalSheet) formData.append("technical_sheet", technicalSheet, technicalSheet.name);
     manuals.forEach((manual) => formData.append("manuals", manual, manual.name));
     if (mainImageUrl) formData.append("images", mainImageUrl, mainImageUrl.name);
@@ -77,7 +77,7 @@ const AddProductPage = () => {
     try {
       const response = await fetch("/api/add-product", { method: "POST", body: formData });
       if (response.ok) {
-        const data = await response.json();
+        toast.success("Producto agregado exitosamente", { position: "top-center", autoClose: 5000 });
         setProductName("");
         setCategory("");
         setBrand("");
@@ -87,17 +87,21 @@ const AddProductPage = () => {
         setPreviewImages([]);
         setTechnicalSheet(null);
         setManuals([]);
-        toast.success("Producto agregado exitosamente", { position: "top-center", autoClose: 5000 });
         formRef.current?.scrollIntoView({ behavior: "smooth" });
       } else {
         toast.error("Falló al agregar el producto", { position: "top-center" });
       }
     } catch (error) {
       console.error(error);
-      alert("Error al agregar el producto");
+      showErrorMessage("Error al agregar el producto");
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleMainImageChange = (event) => {
+    const file = event.target.files[0];
+    if (file) setMainImageUrl(file);
   };
 
   const handleSecondaryImagesChange = (event) => {
@@ -110,15 +114,18 @@ const AddProductPage = () => {
     setManuals((prev) => [...prev, ...files]);
   };
 
-  const handleMainImageChange = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      setMainImageUrl(file);
-    }
-  };
-
   const selectedCategory = categories?.find((cat) => cat._id === category);
   const selectedBrand = selectedCategory?.subcategories?.find((subCat) => subCat._id === brand);
+
+  // Actualiza las subcategorías cuando se selecciona una marca
+  useEffect(() => {
+    if (selectedBrand) {
+      setSubCategories(selectedBrand.subSubCategories || []); // Suponiendo que 'subSubCategories' tiene la información de las subcategorías
+      setSubCategory(""); // Reiniciar la subcategoría cuando se cambia la marca
+    } else {
+      setSubCategories([]); // Reiniciar las subcategorías si no hay marca seleccionada
+    }
+  }, [selectedBrand]);
 
   return (
     <>
@@ -137,13 +144,11 @@ const AddProductPage = () => {
             <FormControl variant="outlined" fullWidth>
               <InputLabel>Categoría</InputLabel>
               <Select value={category} onChange={(e) => setCategory(e.target.value)} label="Categoría">
-                {categories
-                  .filter((cat) => !cat.isSubCategory) // Filtrar solo categorías principales
-                  .map((categoryOption) => (
-                    <MenuItem key={categoryOption._id} value={categoryOption._id}>
-                      {categoryOption.name}
-                    </MenuItem>
-                  ))}
+                {categories.map((categoryOption) => (
+                  <MenuItem key={categoryOption._id} value={categoryOption._id}>
+                    {categoryOption.name}
+                  </MenuItem>
+                ))}
               </Select>
             </FormControl>
 
@@ -162,12 +167,12 @@ const AddProductPage = () => {
               </Box>
             )}
 
-            {selectedBrand && selectedBrand.subcategories?.length > 0 && (
+            {selectedBrand && subCategories.length > 0 && (
               <Box mt={4}>
                 <FormControl variant="outlined" fullWidth>
                   <InputLabel>Subcategoría</InputLabel>
                   <Select value={subCategory} onChange={(e) => setSubCategory(e.target.value)} label="Subcategoría">
-                    {selectedBrand.subcategories.map((subSubCat) => (
+                    {subCategories.map((subSubCat) => (
                       <MenuItem key={subSubCat._id} value={subSubCat._id}>
                         {subSubCat.name}
                       </MenuItem>

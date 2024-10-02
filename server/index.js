@@ -9,6 +9,7 @@ const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const cloudinary = require("cloudinary").v2;
 const cookieParser = require("cookie-parser");
 const Product = require("./models/Product");
+const ObjectId = mongoose.Types.ObjectId;
 const { Category, SubCategory, SubSubCategory } = require('./models/Category');
 const app = express();
 
@@ -102,24 +103,36 @@ app.get("/api/products", async (req, res) => {
 });
 
 // GET a specific product by id
-// GET a specific product by id
 app.get("/api/product/:id", async (req, res) => {
   try {
     const product = await Product.findById(req.params.id)
-      .populate("category", "name")  // populate to get category name
-      .populate("subCategory", "name") // populate to get subcategory name
-      .populate("brand", "name"); // populate to get brand name
+      .populate("category", "name")
+      .populate("brand", "name subSubCategories")
+      .populate("subCategory", "name");
+
+    console.log("product:", product);
+
 
     if (!product) {
       return res.status(404).json({ message: "Product not found" });
     }
 
-    // Structure the response to include all necessary product information
+    // Obtener las sub-subcategorías de la marca
+    const brandSubSubcategories = await SubSubCategory.find({ _id: { $in: product.brand.subSubCategories } });
+    console.log("brandSubSubcategories:", brandSubSubcategories);
+    // Obtener la subcategoría correspondiente a la marca seleccionada
+    const selectedSubCategory = await SubCategory.findById(product.subCategory).populate('subSubCategories');
+    console.log("selectedSubCategory:", selectedSubCategory);
+    // Estructurar la respuesta
     const response = {
       name: product.name,
       category: product.category ? { _id: product.category._id, name: product.category.name } : null,
-      brand: product.brand ? { _id: product.brand._id, name: product.brand.name } : null,
-      subCategory: product.subCategory ? { _id: product.subCategory._id, name: product.subCategory.name } : null,
+      brand: product.brand ? {
+        _id: product.brand._id,
+        name: product.brand.name,
+        subSubCategories: brandSubSubcategories // Aquí se incluyen las sub-subcategorías de la marca
+      } : null,
+      subCategory: selectedSubCategory ? { _id: selectedSubCategory._id, name: selectedSubCategory.name, subSubCategories: selectedSubCategory.subSubCategories } : null, // Aquí se incluye la subcategoría con sus sub-subcategorías
       specifications: product.specifications,
       mainImageUrl: product.mainImageUrl,
       secondaryImageUrls: product.secondaryImageUrls || [],
@@ -144,7 +157,6 @@ app.get("/api/product/:id", async (req, res) => {
   }
 });
 
-
 // POST - Add a new product
 app.post("/api/add-product", uploadMiddleware, async (req, res) => {
   try {
@@ -153,11 +165,12 @@ app.post("/api/add-product", uploadMiddleware, async (req, res) => {
 
     const { name, category, brand, subCategory, specifications } = req.body;
 
+    // Validar el nombre del producto
     if (!name || name.trim() === "") {
       return res.status(400).json({ message: "El nombre del producto es obligatorio." });
     }
 
-    // Process images if they are present
+    // Procesar imágenes
     let mainImageUrl = "";
     let secondaryImageUrls = [];
     if (req.files && req.files["images"] && req.files["images"].length > 0) {
@@ -165,24 +178,24 @@ app.post("/api/add-product", uploadMiddleware, async (req, res) => {
       secondaryImageUrls = req.files["images"].slice(1).map((file) => file.path);
     }
 
-    // Process technical sheet if present
+    // Procesar la ficha técnica
     let technicalSheetUrl = "";
     if (req.files && req.files["technical_sheet"] && req.files["technical_sheet"].length > 0) {
       technicalSheetUrl = req.files["technical_sheet"][0].path;
     }
 
-    // Process manuals if present
+    // Procesar los manuales
     let manualUrls = [];
     if (req.files && req.files["manuals"]) {
       manualUrls = req.files["manuals"].map((file) => file.path);
     }
 
-    // Create the product
+    // Crear el producto
     const product = new Product({
       name,
       category,
-      brand, // Include brand
-      subCategory, // Include subcategory
+      brand, // Incluir marca
+      subCategory, // Incluir subcategoría
       specifications,
       mainImageUrl,
       secondaryImageUrls,
@@ -197,12 +210,21 @@ app.post("/api/add-product", uploadMiddleware, async (req, res) => {
     });
 
     await product.save();
-    res.status(200).json({ message: "Producto agregado exitosamente", product });
+    console.log("Producto guardado:", product);
+
+    // Recuperar el producto para asegurarse que la subcategoría esté correctamente guardada
+    const savedProduct = await Product.findById(product._id)
+      .populate("category", "name")
+      .populate("brand", "name subSubCategories")
+      .populate("subCategory", "name");
+
+    res.status(200).json({ message: "Producto agregado exitosamente", product: savedProduct });
   } catch (err) {
     console.error("Error adding product:", err);
     res.status(500).json({ message: "Error en el servidor", error: err.message });
   }
 });
+
 
 // GET - Obtener una marca específica por ID
 app.get("/api/brand/:id", async (req, res) => {
@@ -434,7 +456,6 @@ app.post("/api/add-category", async (req, res) => {
   try {
     const { name, parentCategory, isMainCategory, categoryType } = req.body;
 
-    // Validar nombre de la categoría
     if (!name || name.trim() === "") {
       return res.status(400).json({ message: "El nombre de la categoría es obligatorio." });
     }
@@ -466,7 +487,7 @@ app.post("/api/add-category", async (req, res) => {
         }
 
         newCategory = new SubSubCategory({ name });
-        parentBrand.subcategories.push(newCategory._id);
+        parentBrand.subSubCategories.push(newCategory._id); // Asegúrate de que sea subSubCategories
         await newCategory.save();
         await parentBrand.save();
       } else {
@@ -477,7 +498,6 @@ app.post("/api/add-category", async (req, res) => {
       newCategory = new Category({
         name,
         subcategories: [],
-        isMainCategory: true,
       });
       await newCategory.save();
     }
@@ -490,6 +510,8 @@ app.post("/api/add-category", async (req, res) => {
 });
 
 
+
+
 // GET - Obtener todas las categorías (sin filtro, devolver todas)
 app.get("/api/categories", async (req, res) => {
   try {
@@ -497,7 +519,7 @@ app.get("/api/categories", async (req, res) => {
       .populate({
         path: 'subcategories',
         populate: {
-          path: 'subcategories',
+          path: 'subSubCategories', // Asegúrate de que este campo sea correcto
           model: 'SubSubCategory',
         },
       });

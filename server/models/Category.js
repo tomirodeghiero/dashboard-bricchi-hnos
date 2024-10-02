@@ -14,7 +14,7 @@ const subCategorySchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  subcategories: [{
+  subSubCategories: [{ // Asegúrate de que el campo esté correctamente nombrado
     type: mongoose.Schema.Types.ObjectId,
     ref: 'SubSubCategory',
   }],
@@ -30,10 +30,6 @@ const categorySchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'SubCategory',
   }],
-  brand: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'SubCategory',
-  },
   isMainCategory: {
     type: Boolean,
     default: true,

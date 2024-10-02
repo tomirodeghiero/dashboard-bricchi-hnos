@@ -1,7 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/router";
-import dynamic from "next/dynamic";
-import { toast, ToastContainer } from "react-toastify";
 import {
   FormControl,
   InputLabel,
@@ -11,8 +9,12 @@ import {
   Card,
   CardContent,
   CircularProgress,
+  Box,
 } from "@mui/material";
+import dynamic from "next/dynamic";
+import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import { addBreaksAfterPeriods } from "src/utils/functions";
 
 const ReactQuill = dynamic(() => import("react-quill"), { ssr: false });
 
@@ -22,28 +24,29 @@ const EditProductPage = () => {
 
   const [productName, setProductName] = useState("");
   const [category, setCategory] = useState("");
+  const [brand, setBrand] = useState("");
   const [subCategory, setSubCategory] = useState("");
   const [specifications, setSpecifications] = useState("");
   const [technicalSheet, setTechnicalSheet] = useState<File | null>(null);
   const [manuals, setManuals] = useState<File[]>([]);
   const [mainImageUrl, setMainImageUrl] = useState<File | null>(null);
   const [previewImages, setPreviewImages] = useState<File[]>([]);
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const formRef = useRef(null);
 
+  // Existing data for preview
   const [existingTechnicalSheetUrl, setExistingTechnicalSheetUrl] = useState<string | null>(null);
   const [existingManualUrls, setExistingManualUrls] = useState<string[]>([]);
   const [existingMainImageUrl, setExistingMainImageUrl] = useState<string | null>(null);
   const [existingPreviewImagesUrls, setExistingPreviewImagesUrls] = useState<string[]>([]);
 
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(false);
-
-  // Fetch categories and subcategories
   useEffect(() => {
     const fetchCategories = async () => {
       try {
         const response = await fetch("/api/categories");
         const data = await response.json();
-        setCategories(data.categories); // Set categories with subcategories included
+        setCategories(data.categories);
       } catch (error) {
         console.error("Error fetching categories:", error);
       }
@@ -52,7 +55,7 @@ const EditProductPage = () => {
     fetchCategories();
   }, []);
 
-  // Fetch product data when id is available
+  // Fetch the product data for editing
   useEffect(() => {
     if (id) {
       const fetchProduct = async () => {
@@ -60,15 +63,16 @@ const EditProductPage = () => {
           const response = await fetch(`/api/product/${id}`);
           if (response.ok) {
             const data = await response.json();
-            console.log(data);
+            console.log("Product data:", data);
             setProductName(data.name);
-            setCategory(data.category?._id); // Ensure category ID is set correctly
-            setSubCategory(data.subCategory?._id || ""); // Ensure subcategory ID is set correctly
+            setCategory(data.category?._id || "");
+            setBrand(data.brand?._id || "");
+            setSubCategory(data.subCategory?._id || ""); // Asegúrate de que esto esté correcto
             setSpecifications(data.specifications);
             setExistingMainImageUrl(data.mainImageUrl);
             setExistingPreviewImagesUrls(data.secondaryImageUrls || []);
             setExistingTechnicalSheetUrl(data.technical_sheet?.url || null);
-            setExistingManualUrls(data.manuals.map((manual: any) => manual.url));
+            setExistingManualUrls(data.manuals.map((manual) => manual.url));
           } else {
             toast.error("Error al cargar el producto", { position: "top-center" });
           }
@@ -76,73 +80,93 @@ const EditProductPage = () => {
           console.error("Error al cargar el producto:", error);
         }
       };
+
       fetchProduct();
     }
   }, [id]);
 
-  const handleSubmitProduct = async (e: any) => {
+
+  const showErrorMessage = (message) => {
+    toast.error(message, { position: "top-center", autoClose: 5000 });
+  };
+
+  const handleSubmitProduct = async (e) => {
     e.preventDefault();
     setLoading(true);
 
+    if (!productName) {
+      showErrorMessage("El nombre del producto está vacío");
+      setLoading(false);
+      return;
+    }
+
     const formData = new FormData();
     formData.append("name", productName);
-    formData.append("category", category);
+    if (category) formData.append("category", category);
+    if (brand) formData.append("brand", brand);
     if (subCategory) formData.append("subCategory", subCategory);
-    formData.append("specifications", specifications);
+    formData.append("specifications", specifications || "");
 
-    if (technicalSheet) {
-      formData.append("technical_sheet", technicalSheet, technicalSheet.name);
-    }
-
-    manuals.forEach((manual, index) => {
-      formData.append("manuals", manual, manual.name);
-    });
-
-    if (mainImageUrl) {
-      formData.append("images", mainImageUrl, mainImageUrl.name);
-    }
-
-    previewImages.forEach((image, index) => {
-      formData.append("images", image, `secondary-image-${index}`);
-    });
+    if (technicalSheet) formData.append("technical_sheet", technicalSheet, technicalSheet.name);
+    manuals.forEach((manual) => formData.append("manuals", manual, manual.name));
+    if (mainImageUrl) formData.append("images", mainImageUrl, mainImageUrl.name);
+    previewImages.forEach((image, index) => formData.append("images", image, `secondary-image-${index}`));
 
     try {
-      const response = await fetch(`/api/edit-product/${id}`, {
-        method: "PUT",
-        body: formData,
-      });
-
+      const response = await fetch(`/api/edit-product/${id}`, { method: "PUT", body: formData });
       if (response.ok) {
-        toast.success("Producto editado exitosamente", { position: "top-center" });
+        toast.success("Producto editado exitosamente", { position: "top-center", autoClose: 5000 });
         router.push("/my-products");
       } else {
         toast.error("Error al editar el producto", { position: "top-center" });
       }
     } catch (error) {
-      console.error("Error al editar el producto:", error);
-      toast.error("Error inesperado", { position: "top-center" });
+      console.error(error);
+      showErrorMessage("Error al editar el producto");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleFileChange = (setter: Function) => (event: any) => {
+  const handleMainImageChange = (event) => {
     const file = event.target.files[0];
-    if (file) setter(file);
+    if (file) setMainImageUrl(file);
   };
+
+  const handleSecondaryImagesChange = (event) => {
+    const files = Array.from(event.target.files);
+    setPreviewImages((prevImages) => [...prevImages, ...files]);
+  };
+
+  const handleManualChange = (event) => {
+    const files = Array.from(event.target.files);
+    setManuals((prev) => [...prev, ...files]);
+  };
+
+  const selectedCategory = categories?.find((cat) => cat._id === category);
+  const selectedBrand = selectedCategory?.subcategories?.find((subCat) => subCat._id === brand);
+
+  useEffect(() => {
+    if (selectedBrand) {
+      // Al cargar un producto existente, asegúrate de que la subcategoría se establezca correctamente
+      const foundSubCategory = selectedBrand.subSubCategories.find((subSubCat) => subSubCat._id === subCategory);
+      setSubCategory(foundSubCategory ? foundSubCategory._id : "");
+    }
+  }, [selectedBrand, subCategory]);
+
 
   return (
     <>
-      <div className="flex justify-center items-center w-full py-12">
+      <div ref={formRef} className="flex justify-center items-center w-full">
         <Card className="shadow-lg w-full max-w-7xl">
           <CardContent>
             <p className="uppercase font-medium text-lg text-gray-500 mb-6">
-              ✏️ ¡Editar producto!
+              ✏️ ¡Editar Producto!
             </p>
             <input
               className="text-gray-800 px-3 h-16 bg-gray-200 mt-2 mb-5 text-2xl w-full font-medium border-b-2 border-gray-300 focus:border-blue-500 transition"
               value={productName}
-              placeholder="Nombre del producto"
+              placeholder="Nombre del Producto"
               onChange={(e) => setProductName(e.target.value)}
             />
             <FormControl variant="outlined" fullWidth>
@@ -156,37 +180,56 @@ const EditProductPage = () => {
               </Select>
             </FormControl>
 
-            {/* Subcategories dropdown only shown if category has subcategories */}
-            {category && categories.find((cat) => cat._id === category)?.subcategories?.length > 0 && (
-              <FormControl variant="outlined" fullWidth className="mt-8">
-                <InputLabel>Subcategoría</InputLabel>
-                <Select value={subCategory} onChange={(e) => setSubCategory(e.target.value)} label="Subcategoría">
-                  {categories
-                    .find((cat) => cat._id === category)
-                    ?.subcategories.map((subCat) => (
+            {selectedCategory && selectedCategory.subcategories.length > 0 && (
+              <Box mt={4}>
+                <FormControl variant="outlined" fullWidth>
+                  <InputLabel>Marca</InputLabel>
+                  <Select value={brand} onChange={(e) => setBrand(e.target.value)} label="Marca">
+                    {selectedCategory.subcategories.map((subCat) => (
                       <MenuItem key={subCat._id} value={subCat._id}>
                         {subCat.name}
                       </MenuItem>
                     ))}
-                </Select>
-              </FormControl>
+                  </Select>
+                </FormControl>
+              </Box>
             )}
 
+            {selectedBrand && selectedBrand.subSubCategories?.length > 0 && (
+              <Box mt={4}>
+                <FormControl variant="outlined" fullWidth>
+                  <InputLabel>Subcategoría</InputLabel>
+                  <Select value={subCategory} onChange={(e) => setSubCategory(e.target.value)} label="Subcategoría">
+                    {selectedBrand.subSubCategories.map((subSubCat) => {
+                      console.log("selectedBrand.subSubCategories", selectedBrand.subSubCategories);
+                      return (
+                        <MenuItem key={subSubCat._id} value={subSubCat._id}>
+                          {subSubCat.name}
+                        </MenuItem>
+                      );
+                    }
+                    )}
+                  </Select>
+                </FormControl>
+              </Box>
+            )}
+
+
             <div className="mt-8">
-              <ReactQuill value={specifications} onChange={setSpecifications} />
+              <ReactQuill value={addBreaksAfterPeriods(specifications)} onChange={setSpecifications} />
             </div>
 
             <div className="mt-8">
               <Button variant="contained" component="label">
                 Subir Imagen Principal
-                <input type="file" onChange={handleFileChange(setMainImageUrl)} hidden />
+                <input type="file" onChange={handleMainImageChange} hidden />
               </Button>
               {existingMainImageUrl && !mainImageUrl && (
                 <div className="mt-4">
                   <img
                     src={existingMainImageUrl}
                     alt="Imagen Principal Actual"
-                    className="object-cover h-28 w-28 rounded mt-2"
+                    className="object-cover h-72 w-72 rounded mt-2"
                   />
                 </div>
               )}
@@ -195,7 +238,7 @@ const EditProductPage = () => {
                   <img
                     src={URL.createObjectURL(mainImageUrl)}
                     alt="Nueva Imagen Principal"
-                    className="object-cover h-28 w-28 rounded mt-2"
+                    className="object-cover h-72 w-72 rounded mt-2"
                   />
                 </div>
               )}
@@ -204,12 +247,15 @@ const EditProductPage = () => {
             <div className="mt-8">
               <Button variant="contained" component="label">
                 Subir Imágenes Secundarias
-                <input type="file" multiple onChange={handleFileChange(setPreviewImages)} hidden />
+                <input type="file" multiple onChange={handleSecondaryImagesChange} hidden />
               </Button>
+
               {existingPreviewImagesUrls.length > 0 && !previewImages.length && (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2 w-full mt-4">
                   {existingPreviewImagesUrls.map((url, index) => (
-                    <img key={index} src={url} alt={`Imagen Secundaria ${index}`} className="object-cover h-full w-full rounded" />
+                    <div key={index}>
+                      <img src={url} alt={`Secundaria ${index}`} className="object-cover h-72 w-full rounded" />
+                    </div>
                   ))}
                 </div>
               )}
@@ -220,7 +266,7 @@ const EditProductPage = () => {
                       <img
                         src={URL.createObjectURL(previewImage)}
                         alt={`Secundaria ${index}`}
-                        className="object-cover h-full w-full rounded"
+                        className="object-cover h-72 w-full rounded"
                       />
                     </div>
                   ))}
@@ -231,7 +277,7 @@ const EditProductPage = () => {
             <div className="mt-4">
               <Button variant="contained" component="label">
                 Subir Ficha Técnica (PDF)
-                <input type="file" onChange={handleFileChange(setTechnicalSheet)} accept="application/pdf" hidden />
+                <input type="file" onChange={(e) => setTechnicalSheet(e.target.files[0])} accept="application/pdf" hidden />
               </Button>
               {existingTechnicalSheetUrl && !technicalSheet && (
                 <p className="mt-2">
@@ -246,7 +292,7 @@ const EditProductPage = () => {
             <div className="mt-8">
               <Button variant="contained" component="label">
                 Subir Manuales (PDF)
-                <input type="file" multiple onChange={handleFileChange(setManuals)} accept="application/pdf" hidden />
+                <input type="file" multiple onChange={handleManualChange} accept="application/pdf" hidden />
               </Button>
               {existingManualUrls.length > 0 && !manuals.length && (
                 <ul className="mt-2">

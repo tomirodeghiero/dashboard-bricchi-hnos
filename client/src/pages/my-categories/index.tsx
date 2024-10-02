@@ -89,7 +89,6 @@ const MyCategoriesPage = () => {
 
   const handleDelete = async (categoryId, categoryType, parentCategoryId) => {
     if (confirm("¿Estás seguro de que deseas eliminar esta categoría y todo lo relacionado?")) {
-      // Construir la URL con los parámetros necesarios
       const response = await fetch(`/api/delete-category/${categoryId}?categoryType=${categoryType}&parentCategory=${parentCategoryId}`, {
         method: "DELETE",
       });
@@ -103,18 +102,16 @@ const MyCategoriesPage = () => {
   };
 
   const handleEdit = (categoryId, categoryType, mainCategoryId, parentCategoryId) => {
-    // Redirigir a la página de edición con los parámetros adecuados
     router.push({
       pathname: `/edit-category/${categoryId}`,
       query: {
         categoryType,
-        mainCategoryId: mainCategoryId || null, // Pasar el ID de la categoría principal si existe
-        parentCategory: parentCategoryId || null, // Pasar el ID de la categoría padre si existe
-        isMainCategory: categoryType === 'main', // Establecer si es una categoría principal
+        mainCategoryId: mainCategoryId || null,
+        parentCategory: parentCategoryId || null,
+        isMainCategory: categoryType === 'main',
       },
     });
   };
-
 
   // Renderizar la categoría principal con sus marcas y subcategorías
   const renderCategoryTree = (category) => {
@@ -145,20 +142,20 @@ const MyCategoriesPage = () => {
                     <CategoryCard
                       category={subCategory}
                       label="Marca"
-                      onEdit={() => handleEdit(subCategory._id, "brand", category._id)} // Aquí pasamos el `mainCategoryId`
-                      onDelete={() => handleDelete(subCategory._id, "brand", category._id)} // Aquí también pasamos el `mainCategoryId`
+                      onEdit={() => handleEdit(subCategory._id, "brand", category._id)}
+                      onDelete={() => handleDelete(subCategory._id, "brand", category._id)}
                     />
                     {/* Renderizar las sub-subcategorías */}
-                    {subCategory.subcategories && subCategory.subcategories.length > 0 && (
+                    {subCategory.subSubCategories && subCategory.subSubCategories.length > 0 && (
                       <Box mt={1.5}>
                         <Typography variant="body1" sx={{ fontSize: '0.875rem', fontWeight: 500 }}>Subcategorías:</Typography>
-                        {subCategory.subcategories.map((subSubCategory) => (
+                        {subCategory.subSubCategories.map((subSubCategory) => (
                           <CategoryCard
                             key={subSubCategory._id}
                             category={subSubCategory}
                             label="Subcategoría"
-                            onEdit={() => handleEdit(subSubCategory._id, "subcategory", category._id, subCategory._id)} // Pasamos el `mainCategoryId` y `parentCategoryId`
-                            onDelete={() => handleDelete(subSubCategory._id, "subcategory", subCategory._id)} // Pasamos el `parentCategoryId`
+                            onEdit={() => handleEdit(subSubCategory._id, "subcategory", category._id, subCategory._id)}
+                            onDelete={() => handleDelete(subSubCategory._id, "subcategory", subCategory._id)}
                           />
                         ))}
                       </Box>
@@ -172,7 +169,6 @@ const MyCategoriesPage = () => {
       </Accordion>
     );
   };
-
 
   return (
     <Box p={3}>
