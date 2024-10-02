@@ -8,6 +8,7 @@ import {
   Card,
   CardContent,
   CircularProgress,
+  Box,
 } from "@mui/material";
 import dynamic from "next/dynamic";
 import { toast, ToastContainer } from "react-toastify";
@@ -19,7 +20,8 @@ const ReactQuill = dynamic(() => import("react-quill"), { ssr: false });
 const AddProductPage = () => {
   const [productName, setProductName] = useState("");
   const [category, setCategory] = useState("");
-  const [subCategory, setSubCategory] = useState("");
+  const [brand, setBrand] = useState(""); // Used for the brand selection
+  const [subCategory, setSubCategory] = useState(""); // Subcategory within the selected brand
   const [specifications, setSpecifications] = useState("");
   const [technicalSheet, setTechnicalSheet] = useState<File | null>(null);
   const [manuals, setManuals] = useState<File[]>([]);
@@ -56,15 +58,16 @@ const AddProductPage = () => {
     });
   };
 
-  const handleSubmitProduct = async (e: any) => {
+  const handleSubmitProduct = async (e) => {
     e.preventDefault();
-    setLoading(true); // Mostrar indicador de carga
+    setLoading(true);
     if (!productName) return showErrorMessage("El nombre del producto está vacío");
 
     const formData = new FormData();
     formData.append("name", productName);
     if (category) formData.append("category", category);
-    if (subCategory) formData.append("subCategory", subCategory);
+    if (brand) formData.append("brand", brand); // Include the selected brand
+    if (subCategory) formData.append("subCategory", subCategory); // Include the selected subcategory within the brand
     formData.append("specifications", specifications || "");
     if (technicalSheet) formData.append("technical_sheet", technicalSheet, technicalSheet.name);
     manuals.forEach((manual) => formData.append("manuals", manual, manual.name));
@@ -74,8 +77,10 @@ const AddProductPage = () => {
     try {
       const response = await fetch("/api/add-product", { method: "POST", body: formData });
       if (response.ok) {
+        const data = await response.json();
         setProductName("");
         setCategory("");
+        setBrand("");
         setSubCategory("");
         setSpecifications("");
         setMainImageUrl(null);
@@ -95,17 +100,17 @@ const AddProductPage = () => {
     }
   };
 
-  const handleSecondaryImagesChange = (event: any) => {
+  const handleSecondaryImagesChange = (event) => {
     const files = Array.from(event.target.files);
     setPreviewImages((prevImages) => [...prevImages, ...files]);
   };
 
-  const handleManualChange = (event: any) => {
+  const handleManualChange = (event) => {
     const files = Array.from(event.target.files);
     setManuals((prev) => [...prev, ...files]);
   };
 
-  const handleMainImageChange = (event: any) => {
+  const handleMainImageChange = (event) => {
     const file = event.target.files[0];
     if (file) {
       setMainImageUrl(file);
@@ -113,6 +118,7 @@ const AddProductPage = () => {
   };
 
   const selectedCategory = categories?.find((cat) => cat._id === category);
+  const selectedBrand = selectedCategory?.subcategories?.find((subCat) => subCat._id === brand);
 
   return (
     <>
@@ -142,16 +148,33 @@ const AddProductPage = () => {
             </FormControl>
 
             {selectedCategory && selectedCategory.subcategories.length > 0 && (
-              <FormControl variant="outlined" fullWidth className="mt-8" style={{ marginTop: '2rem' }}>
-                <InputLabel>Subcategoría</InputLabel>
-                <Select value={subCategory} onChange={(e) => setSubCategory(e.target.value)} label="Subcategoría">
-                  {selectedCategory.subcategories.map((subCat) => (
-                    <MenuItem key={subCat._id} value={subCat._id}>
-                      {subCat.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <Box mt={4}>
+                <FormControl variant="outlined" fullWidth>
+                  <InputLabel>Marca</InputLabel>
+                  <Select value={brand} onChange={(e) => setBrand(e.target.value)} label="Marca">
+                    {selectedCategory.subcategories.map((subCat) => (
+                      <MenuItem key={subCat._id} value={subCat._id}>
+                        {subCat.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Box>
+            )}
+
+            {selectedBrand && selectedBrand.subcategories?.length > 0 && (
+              <Box mt={4}>
+                <FormControl variant="outlined" fullWidth>
+                  <InputLabel>Subcategoría</InputLabel>
+                  <Select value={subCategory} onChange={(e) => setSubCategory(e.target.value)} label="Subcategoría">
+                    {selectedBrand.subcategories.map((subSubCat) => (
+                      <MenuItem key={subSubCat._id} value={subSubCat._id}>
+                        {subSubCat.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Box>
             )}
 
             <div className="mt-8">
@@ -168,7 +191,7 @@ const AddProductPage = () => {
                   <img
                     src={URL.createObjectURL(mainImageUrl)}
                     alt="Main Image Preview"
-                    className="object-cover h-28 w-28 rounded mt-2"
+                    className="object-cover h-72 w-72 rounded mt-2"
                   />
                 </div>
               )}
@@ -186,7 +209,7 @@ const AddProductPage = () => {
                     <img
                       src={URL.createObjectURL(previewImage)}
                       alt={`Secundaria ${index}`}
-                      className="object-cover h-full w-full rounded"
+                      className="object-cover h-72 w-full rounded"
                     />
                   </div>
                 ))}
@@ -196,7 +219,7 @@ const AddProductPage = () => {
             <div className="mt-4">
               <Button variant="contained" component="label">
                 Subir Ficha Técnica (PDF)
-                <input type="file" onChange={(e: any) => setTechnicalSheet(e.target.files[0])} accept="application/pdf" hidden />
+                <input type="file" onChange={(e) => setTechnicalSheet(e.target.files[0])} accept="application/pdf" hidden />
               </Button>
               {technicalSheet && <p className="mt-2 text-gray-600">Archivo subido: {technicalSheet.name}</p>}
             </div>

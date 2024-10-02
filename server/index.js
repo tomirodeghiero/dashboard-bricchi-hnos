@@ -9,7 +9,7 @@ const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const cloudinary = require("cloudinary").v2;
 const cookieParser = require("cookie-parser");
 const Product = require("./models/Product");
-const Category = require('./models/Category');
+const { Category, SubCategory, SubSubCategory } = require('./models/Category');
 const app = express();
 
 mongoose.set("strictQuery", false);
@@ -100,72 +100,98 @@ app.get("/api/products", async (req, res) => {
 });
 
 // GET a specific product by id
+// GET a specific product by id
 app.get("/api/product/:id", async (req, res) => {
   try {
     const product = await Product.findById(req.params.id)
-      .populate("category", "name")  // populate para traer el nombre de la categoría
-      .populate("subCategory", "name"); // populate para la subcategoría también
+      .populate("category", "name")  // populate to get category name
+      .populate("subCategory", "name") // populate to get subcategory name
+      .populate("brand", "name"); // populate to get brand name
 
     if (!product) {
       return res.status(404).json({ message: "Product not found" });
     }
 
-    res.json(product);
+    // Structure the response to include all necessary product information
+    const response = {
+      name: product.name,
+      category: product.category ? { _id: product.category._id, name: product.category.name } : null,
+      brand: product.brand ? { _id: product.brand._id, name: product.brand.name } : null,
+      subCategory: product.subCategory ? { _id: product.subCategory._id, name: product.subCategory.name } : null,
+      specifications: product.specifications,
+      mainImageUrl: product.mainImageUrl,
+      secondaryImageUrls: product.secondaryImageUrls || [],
+      technical_sheet: product.technical_sheet
+        ? {
+          file_name: product.technical_sheet.file_name,
+          url: product.technical_sheet.url,
+        }
+        : null,
+      manuals: product.manuals
+        ? product.manuals.map((manual) => ({
+          file_name: manual.file_name,
+          url: manual.url,
+        }))
+        : [],
+    };
+
+    res.json(response);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 });
 
+
 // POST - Add a new product
 app.post("/api/add-product", uploadMiddleware, async (req, res) => {
   try {
-    // Mostrar el cuerpo de la solicitud y los archivos para depurar
     console.log("Body:", req.body);
     console.log("Files:", req.files);
 
-    const { name, description, category, subCategory, specifications } = req.body;
+    const { name, category, brand, subCategory, specifications } = req.body;
 
-    // Validar si el campo 'name' está vacío
     if (!name || name.trim() === "") {
       return res.status(400).json({ message: "El nombre del producto es obligatorio." });
     }
 
-    // Procesar las imágenes si están presentes
+    // Process images if they are present
     let mainImageUrl = "";
     let secondaryImageUrls = [];
     if (req.files && req.files["images"] && req.files["images"].length > 0) {
-      mainImageUrl = req.files["images"][0].path; // URL de la imagen principal
-      secondaryImageUrls = req.files["images"].slice(1).map((file) => file.path); // URLs de las imágenes secundarias
+      mainImageUrl = req.files["images"][0].path;
+      secondaryImageUrls = req.files["images"].slice(1).map((file) => file.path);
     }
 
-    // Procesar la ficha técnica si está presente
-    const technicalSheetUrl = req.files && req.files["technical_sheet"]
-      ? req.files["technical_sheet"][0].path
-      : "";
+    // Process technical sheet if present
+    let technicalSheetUrl = "";
+    if (req.files && req.files["technical_sheet"] && req.files["technical_sheet"].length > 0) {
+      technicalSheetUrl = req.files["technical_sheet"][0].path;
+    }
 
-    // Procesar los manuales si están presentes
-    const manualUrls = req.files && req.files["manuals"]
-      ? req.files["manuals"].map((file) => file.path)
-      : [];
+    // Process manuals if present
+    let manualUrls = [];
+    if (req.files && req.files["manuals"]) {
+      manualUrls = req.files["manuals"].map((file) => file.path);
+    }
 
-    // Crear el producto
+    // Create the product
     const product = new Product({
       name,
-      description,
-      mainImageUrl, // Esta será una cadena vacía si no hay imagen principal
+      category,
+      brand, // Include brand
+      subCategory, // Include subcategory
       specifications,
-      secondaryImageUrls, // Será un array vacío si no hay imágenes secundarias
+      mainImageUrl,
+      secondaryImageUrls,
       technical_sheet: {
-        file_name: req.files && req.files["technical_sheet"] ? req.files["technical_sheet"][0].originalname : "",
-        url: technicalSheetUrl, // Será una cadena vacía si no hay ficha técnica
+        file_name: req.files["technical_sheet"] ? req.files["technical_sheet"][0].originalname : "",
+        url: technicalSheetUrl,
       },
       manuals: manualUrls.map((url, index) => ({
-        file_name: req.files && req.files["manuals"] ? req.files["manuals"][index].originalname : "",
+        file_name: req.files["manuals"] ? req.files["manuals"][index].originalname : "",
         url,
       })),
-      category,
-      subCategory: subCategory || null,
     });
 
     await product.save();
@@ -175,6 +201,9 @@ app.post("/api/add-product", uploadMiddleware, async (req, res) => {
     res.status(500).json({ message: "Error en el servidor", error: err.message });
   }
 });
+
+
+
 
 // PUT - Update a product by ID
 app.put("/api/edit-product/:id", uploadMiddleware, async (req, res) => {
@@ -235,27 +264,42 @@ app.get("/api/category/:id", async (req, res) => {
 });
 
 
-// DELETE - Eliminar una categoría y sus subcategorías
+// DELETE - Eliminar una categoría y todas sus subcategorías
 app.delete("/api/delete-category/:id", async (req, res) => {
   try {
     const categoryId = req.params.id;
 
-    const category = await Category.findByIdAndRemove(categoryId);
-    if (!category) {
-      return res.status(404).json({ message: "Category not found" });
-    }
+    // Función recursiva para eliminar una categoría y todas sus subcategorías
+    const deleteCategoryRecursively = async (categoryId) => {
+      const category = await Category.findById(categoryId).populate('subcategories');
 
-    await Category.updateMany(
-      { subcategories: categoryId },
-      { $pull: { subcategories: categoryId } }
-    );
+      // Verificar si la categoría existe antes de intentar acceder a sus subcategorías
+      if (!category) {
+        console.warn(`Categoría con ID ${categoryId} no encontrada.`);
+        return;
+      }
 
-    res.status(200).json({ message: "Category deleted successfully" });
+      // Si tiene subcategorías, eliminarlas de forma recursiva
+      if (category.subcategories && category.subcategories.length > 0) {
+        for (let subCategory of category.subcategories) {
+          await deleteCategoryRecursively(subCategory._id); // Eliminar subcategoría recursivamente
+        }
+      }
+
+      // Finalmente, eliminar la categoría principal
+      await Category.findByIdAndRemove(categoryId);
+    };
+
+    await deleteCategoryRecursively(categoryId); // Eliminar categoría de forma recursiva
+
+    res.status(200).json({ message: "Categoría eliminada con éxito" });
   } catch (err) {
-    console.error("Error deleting category:", err);
-    res.status(500).json({ message: "Server error" });
+    console.error("Error eliminando categoría:", err);
+    res.status(500).json({ message: "Error en el servidor", error: err.message });
   }
 });
+
+
 
 // DELETE - Delete a product by name
 app.delete("/api/delete-product-by-name/:name", async (req, res) => {
@@ -311,37 +355,85 @@ app.put("/api/edit-product/:id", uploadMiddleware, async (req, res) => {
   }
 });
 
-// POST - Add a new category or subcategory
+// POST - Añadir una nueva categoría, subcategoría o sub-subcategoría
 app.post("/api/add-category", async (req, res) => {
   try {
-    const { name, subcategories, isMainCategory } = req.body;
+    const { name, parentCategory, isMainCategory, categoryType } = req.body;
 
-    const category = new Category({
-      name,
-      subcategories: subcategories || [],
-      isMainCategory: isMainCategory !== undefined ? isMainCategory : true,
-    });
+    // Validar nombre de la categoría
+    if (!name || name.trim() === "") {
+      return res.status(400).json({ message: "El nombre de la categoría es obligatorio." });
+    }
 
-    await category.save();
+    let newCategory;
 
-    res.status(200).json({ message: "Category added successfully", category });
+    // Lógica para categorías no principales
+    if (!isMainCategory) {
+      if (!parentCategory) {
+        return res.status(400).json({ message: "Categoría padre no especificada." });
+      }
+
+      if (categoryType === "brand") {
+        // Crear una nueva marca dentro de la categoría principal
+        const parent = await Category.findById(parentCategory);
+        if (!parent) {
+          return res.status(404).json({ message: "Categoría principal no encontrada." });
+        }
+
+        newCategory = new SubCategory({ name });
+        parent.subcategories.push(newCategory._id);
+        await newCategory.save();
+        await parent.save();
+      } else if (categoryType === "subcategory") {
+        // Crear una subcategoría dentro de una marca específica
+        const parentBrand = await SubCategory.findById(parentCategory);
+        if (!parentBrand) {
+          return res.status(404).json({ message: "Marca padre no encontrada." });
+        }
+
+        newCategory = new SubSubCategory({ name });
+        parentBrand.subcategories.push(newCategory._id);
+        await newCategory.save();
+        await parentBrand.save();
+      } else {
+        return res.status(400).json({ message: "Tipo de categoría inválido." });
+      }
+    } else {
+      // Crear una categoría principal
+      newCategory = new Category({
+        name,
+        subcategories: [],
+        isMainCategory: true,
+      });
+      await newCategory.save();
+    }
+
+    res.status(200).json({ message: "Categoría añadida con éxito", category: newCategory });
   } catch (err) {
-    console.error("Error adding category:", err);
-    res.status(500).json({ message: "Server error", error: err.message });
+    console.error("Error añadiendo categoría:", err);
+    res.status(500).json({ message: "Error en el servidor", error: err.message });
   }
 });
+
 
 // GET - Obtener todas las categorías (sin filtro, devolver todas)
 app.get("/api/categories", async (req, res) => {
   try {
-    const categories = await Category.find().populate('subcategories');
+    const categories = await Category.find()
+      .populate({
+        path: 'subcategories',
+        populate: {
+          path: 'subcategories',
+          model: 'SubSubCategory',
+        },
+      });
+
     res.status(200).json({ categories });
   } catch (err) {
     console.error("Error fetching categories:", err);
     res.status(500).json({ message: "Server error", error: err.message });
   }
 });
-
 
 // PUT - Actualizar una categoría por ID
 app.put("/api/edit-category/:id", async (req, res) => {
@@ -364,9 +456,6 @@ app.put("/api/edit-category/:id", async (req, res) => {
     res.status(500).json({ message: "Server error", error: err.message });
   }
 });
-
-
-
 
 // Listen port
 app.listen(5001, () => {

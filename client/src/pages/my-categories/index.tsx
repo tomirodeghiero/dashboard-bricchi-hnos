@@ -3,40 +3,73 @@ import { useEffect, useState } from "react";
 import { ToastContainer, toast } from "react-toastify";
 import Card from "@mui/material/Card";
 import { styled } from "@mui/material/styles";
-import { Button } from "@mui/material";
+import { Button, Accordion, AccordionSummary, AccordionDetails, Typography, Box, Divider } from "@mui/material";
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
 import "react-toastify/dist/ReactToastify.css";
 
-// Styled component para el diseño
-const StyledCard = styled(Card)(({ theme, isSelected }) => ({
+// Styled component para las tarjetas
+const StyledCard = styled(Card)(({ theme }) => ({
   borderRadius: theme.shape.borderRadius,
-  padding: theme.spacing(2),
+  padding: theme.spacing(1.5),
   backgroundColor: "#ffffff",
-  transition: "transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out, border 0.3s ease-in-out",
+  transition: "transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out",
   "&:hover": {
-    transform: "scale(1.03)",
-    boxShadow: "0 8px 16px rgba(0, 0, 0, 0.15)",
+    transform: "scale(1.01)",
+    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
     cursor: "pointer",
   },
-  border: isSelected ? "2px solid #E8B600" : "2px solid transparent",
-  boxShadow: isSelected ? "0 0 10px rgba(232, 182, 0, 0.5)" : "none",
   textAlign: "center",
   display: "flex",
   flexDirection: "column",
   justifyContent: "space-between",
+  marginBottom: theme.spacing(2),
 }));
 
-// Estilo para los textos largos (ellipsis)
-const EllipsisText = styled("div")({
-  whiteSpace: "nowrap",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  maxWidth: "180px",
-});
+// Títulos estilizados
+const Title = styled(Typography)(({ theme }) => ({
+  color: "#333",
+  backgroundColor: "#f7f7f7",
+  padding: theme.spacing(1, 2),
+  borderRadius: theme.shape.borderRadius,
+  margin: theme.spacing(2, 0),
+  fontWeight: 500,
+  textAlign: "center",
+}));
+
+const CategoryCard = ({ category, label, onEdit, onDelete }) => (
+  <StyledCard>
+    <Typography variant="subtitle1" sx={{ fontSize: '0.875rem', fontWeight: 500 }}>{category.name}</Typography>
+    <Typography variant="body2" color="textSecondary">{label}</Typography>
+    <Box mt={1} display="flex" justifyContent="center">
+      <Button
+        variant="outlined"
+        startIcon={<EditIcon />}
+        onClick={() => onEdit(category._id)}
+        color="primary"
+        size="small"
+        style={{ marginRight: "8px" }}
+      >
+        Editar
+      </Button>
+      <Button
+        variant="outlined"
+        startIcon={<DeleteIcon />}
+        onClick={() => onDelete(category._id)}
+        color="secondary"
+        size="small"
+      >
+        Eliminar
+      </Button>
+    </Box>
+  </StyledCard>
+);
 
 const MyCategoriesPage = () => {
   const router = useRouter();
-  const [categories, setCategories] = useState<any[]>([]);
-  const [loadingCategories, setLoadingCategories] = useState<boolean>(true);
+  const [categories, setCategories] = useState([]);
+  const [loadingCategories, setLoadingCategories] = useState(true);
 
   useEffect(() => {
     fetchCategories();
@@ -44,7 +77,7 @@ const MyCategoriesPage = () => {
 
   const fetchCategories = async () => {
     setLoadingCategories(true);
-    const response = await fetch("/api/categories"); // Endpoint para obtener categorías
+    const response = await fetch("/api/categories");
     if (response.ok) {
       const data = await response.json();
       setCategories(data.categories);
@@ -54,110 +87,107 @@ const MyCategoriesPage = () => {
     setLoadingCategories(false);
   };
 
-  const handleDelete = async (categoryId: string) => {
-    const response = await fetch(`/api/delete-category/${categoryId}`, { method: "DELETE" });
-    if (response.ok) {
-      toast.success("Categoría eliminada", { position: "top-center" });
-      fetchCategories();
-    } else {
-      toast.error("Error al eliminar categoría", { position: "top-center" });
+  const handleDelete = async (categoryId) => {
+    if (confirm("¿Estás seguro de que deseas eliminar esta categoría y todo lo relacionado?")) {
+      const response = await fetch(`/api/delete-category/${categoryId}`, { method: "DELETE" });
+      if (response.ok) {
+        toast.success("Categoría eliminada correctamente", { position: "top-center" });
+        fetchCategories();
+      } else {
+        toast.error("Error al eliminar la categoría", { position: "top-center" });
+      }
     }
   };
 
-  const handleEdit = (categoryId: string) => {
+  const handleEdit = (categoryId) => {
     router.push(`/edit-category/${categoryId}`);
   };
 
-  // Filtrar categorías principales y subcategorías
-  const mainCategories = categories.filter((category) => category.isMainCategory);
-  const subcategories = categories.filter((category) => !category.isMainCategory);
+  // Renderizar la categoría principal con sus marcas y subcategorías
+  const renderCategoryTree = (category) => {
+    return (
+      <Accordion key={category._id} sx={{ backgroundColor: "#fafafa", borderRadius: 1, marginTop: 2 }}>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ padding: "0 16px" }}>
+          <Typography variant="subtitle1" sx={{ fontSize: '0.875rem' }}>
+            <strong>{category.name}</strong>
+          </Typography>
+        </AccordionSummary>
+        <AccordionDetails>
+          <CategoryCard
+            category={category}
+            label={category.isMainCategory ? "Categoría Principal" : "Marca"}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+          />
+          {/* Renderizar las marcas */}
+          {category.subcategories && category.subcategories.length > 0 && (
+            <Box mt={1.5}>
+              <Typography variant="body1" sx={{ fontSize: '0.875rem', fontWeight: 500 }} gutterBottom>Marcas:</Typography>
+              {category.subcategories.map((subCategory) => (
+                <Accordion key={subCategory._id} sx={{ backgroundColor: "#f5f5f5", marginTop: 1 }}>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ padding: "0 16px" }}>
+                    <Typography variant="subtitle1" sx={{ fontSize: '0.875rem' }}><strong>{subCategory.name}</strong> - Marca</Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <CategoryCard
+                      category={subCategory}
+                      label="Marca"
+                      onEdit={handleEdit}
+                      onDelete={handleDelete}
+                    />
+                    {/* Renderizar las sub-subcategorías */}
+                    {subCategory.subcategories && subCategory.subcategories.length > 0 && (
+                      <Box mt={1.5}>
+                        <Typography variant="body1" sx={{ fontSize: '0.875rem', fontWeight: 500 }}>Subcategorías:</Typography>
+                        {subCategory.subcategories.map((subSubCategory) => (
+                          <CategoryCard
+                            key={subSubCategory._id}
+                            category={subSubCategory}
+                            label="Subcategoría"
+                            onEdit={handleEdit}
+                            onDelete={handleDelete}
+                          />
+                        ))}
+                      </Box>
+                    )}
+                  </AccordionDetails>
+                </Accordion>
+              ))}
+            </Box>
+          )}
+        </AccordionDetails>
+      </Accordion>
+    );
+  };
 
   return (
-    <div>
-      {/* Título para categorías principales */}
-      <h2 className="text-base font-semibold mt-4 mb-2 bg-black text-white uppercase inline-flex px-4 py-1 rounded-lg">Categorías Principales</h2>
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 lg:gap-6 lg:py-4">
-        {loadingCategories
-          ? Array.from({ length: 8 }).map((_, idx) => (
-            <StyledCard key={idx}>
-              <div className="w-48 h-48 mt-5 mx-auto bg-gray-200 rounded-full"></div>
-              <div className="mt-5 flex flex-col items-center">
-                <div className="bg-gray-200 w-2/3 h-4 my-2 rounded"></div>
-                <div className="bg-gray-200 w-1/2 h-4 my-2 rounded"></div>
-              </div>
-            </StyledCard>
-          ))
-          : mainCategories.map((category) => (
-            <StyledCard key={category._id}>
-              <div className="flex flex-col items-center">
-                <h3 className="font-bold text-[1.1rem] text-center">
-                  <EllipsisText>{category.name}</EllipsisText>
-                </h3>
-                <p className="text-gray-600">Categoría Principal</p>
-              </div>
-              <div className="mt-3 flex justify-around">
-                <Button
-                  onClick={() => handleEdit(category._id)}
-                  variant="outlined"
-                  color="primary"
-                >
-                  Editar
-                </Button>
-                <Button
-                  onClick={() => handleDelete(category._id)}
-                  variant="outlined"
-                  color="secondary"
-                >
-                  Eliminar
-                </Button>
-              </div>
-            </StyledCard>
-          ))}
-      </div>
-
-      {/* Título para subcategorías */}
-      <h2 className="text-base font-semibold mt-4 mb-2 bg-black text-white uppercase inline-flex px-4 py-1 rounded-lg">Subcategorías</h2>
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 lg:gap-6 lg:py-4">
-        {loadingCategories
-          ? Array.from({ length: 8 }).map((_, idx) => (
-            <StyledCard key={idx}>
-              <div className="w-48 h-48 mt-5 mx-auto bg-gray-200 rounded-full"></div>
-              <div className="mt-5 flex flex-col items-center">
-                <div className="bg-gray-200 w-2/3 h-4 my-2 rounded"></div>
-                <div className="bg-gray-200 w-1/2 h-4 my-2 rounded"></div>
-              </div>
-            </StyledCard>
-          ))
-          : subcategories.map((category) => (
-            <StyledCard key={category._id}>
-              <div className="flex flex-col items-center">
-                <h3 className="font-bold text-[1.1rem] text-center">
-                  <EllipsisText>{category.name}</EllipsisText>
-                </h3>
-                <p className="text-gray-600">Subcategoría</p>
-              </div>
-              <div className="mt-3 flex justify-around">
-                <Button
-                  onClick={() => handleEdit(category._id)}
-                  variant="outlined"
-                  color="primary"
-                >
-                  Editar
-                </Button>
-                <Button
-                  onClick={() => handleDelete(category._id)}
-                  variant="outlined"
-                  color="secondary"
-                >
-                  Eliminar
-                </Button>
-              </div>
-            </StyledCard>
-          ))}
-      </div>
+    <Box p={3}>
+      <Title style={{ textAlign: "start", fontSize: 22, fontWeight: 500 }}>Categorías</Title>
+      <Divider sx={{ marginBottom: 3 }} />
+      <Box>
+        {loadingCategories ? (
+          <Box display="grid" gridTemplateColumns="repeat(3, 1fr)" gap={2}>
+            {Array.from({ length: 8 }).map((_, idx) => (
+              <StyledCard key={idx}>
+                <Box className="w-48 h-48 mt-5 mx-auto bg-gray-200 rounded-full"></Box>
+                <Box mt={2} className="flex flex-col items-center">
+                  <Box className="bg-gray-200 w-2/3 h-4 my-1 rounded"></Box>
+                  <Box className="bg-gray-200 w-1/2 h-4 my-1 rounded"></Box>
+                </Box>
+              </StyledCard>
+            ))}
+          </Box>
+        ) : (
+          <Box display="grid" gridTemplateColumns="repeat(3, 1fr)" gap={2}>
+            {categories
+              .filter((category) => category.isMainCategory)
+              .map((category) => renderCategoryTree(category))}
+          </Box>
+        )}
+      </Box>
 
       <ToastContainer position="top-right" autoClose={5000} />
-    </div>
+    </Box>
   );
 };
 

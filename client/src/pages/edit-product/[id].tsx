@@ -60,6 +60,7 @@ const EditProductPage = () => {
           const response = await fetch(`/api/product/${id}`);
           if (response.ok) {
             const data = await response.json();
+            console.log(data);
             setProductName(data.name);
             setCategory(data.category?._id); // Ensure category ID is set correctly
             setSubCategory(data.subCategory?._id || ""); // Ensure subcategory ID is set correctly
