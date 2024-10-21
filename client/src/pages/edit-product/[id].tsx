@@ -34,6 +34,18 @@ const EditProductPage = () => {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const formRef = useRef(null);
+  const [deletedImages, setDeletedImages] = useState([]);
+
+  const handleExistingImageDelete = (index) => {
+    const imageToDelete = existingPreviewImagesUrls[index];
+    setDeletedImages((prev) => [...prev, imageToDelete]);
+    setExistingPreviewImagesUrls((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleNewImageDelete = (index) => {
+    setPreviewImages((prevImages) => prevImages.filter((_, i) => i !== index));
+  };
+
 
   // Existing data for preview
   const [existingTechnicalSheetUrl, setExistingTechnicalSheetUrl] = useState<string | null>(null);
@@ -122,10 +134,14 @@ const EditProductPage = () => {
     if (mainImageUrl) {
       formData.append("images", mainImageUrl, mainImageUrl.name);
     }
+
     previewImages.forEach((image, index) => formData.append("images", image, `secondary-image-${index}`));
 
     if (technicalSheet) formData.append("technical_sheet", technicalSheet, technicalSheet.name);
     manuals.forEach((manual) => formData.append("manuals", manual, manual.name));
+
+    // Incluir imágenes eliminadas
+    deletedImages.forEach((deletedImageUrl) => formData.append("deletedImages", deletedImageUrl));
 
     try {
       const response = await fetch(`/api/edit-product/${id}`, { method: "PUT", body: formData });
@@ -142,6 +158,7 @@ const EditProductPage = () => {
       setLoading(false);
     }
   };
+
 
   const handleMainImageChange = (event) => {
     const file = event.target.files[0];
