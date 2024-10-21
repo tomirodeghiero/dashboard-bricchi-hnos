@@ -9,6 +9,7 @@ import {
   CardContent,
   CircularProgress,
   Box,
+  IconButton,
 } from "@mui/material";
 import dynamic from "next/dynamic";
 import { toast, ToastContainer } from "react-toastify";
@@ -57,21 +58,33 @@ const AddProductPage = () => {
     setLoading(true);
 
     if (!productName) {
-      showErrorMessage("El nombre del producto está vacío");
+      showErrorMessage("El nombre del producto es obligatorio");
+      setLoading(false);
+      return;
+    }
+
+    if (!category) {
+      showErrorMessage("La categoría del producto es obligatoria");
+      setLoading(false);
+      return;
+    }
+
+    if (!mainImageUrl) {
+      showErrorMessage("La imagen principal del producto es obligatoria");
       setLoading(false);
       return;
     }
 
     const formData = new FormData();
     formData.append("name", productName);
-    if (category) formData.append("category", category);
+    formData.append("category", category);
     if (brand) formData.append("brand", brand);
     if (subCategory) formData.append("subCategory", subCategory);
     formData.append("specifications", specifications || "");
 
     if (technicalSheet) formData.append("technical_sheet", technicalSheet, technicalSheet.name);
     manuals.forEach((manual) => formData.append("manuals", manual, manual.name));
-    if (mainImageUrl) formData.append("images", mainImageUrl, mainImageUrl.name);
+    formData.append("images", mainImageUrl, mainImageUrl.name);
     previewImages.forEach((image, index) => formData.append("images", image, `secondary-image-${index}`));
 
     try {
@@ -112,6 +125,10 @@ const AddProductPage = () => {
   const handleManualChange = (event) => {
     const files = Array.from(event.target.files);
     setManuals((prev) => [...prev, ...files]);
+  };
+
+  const handleImageDelete = (index) => {
+    setPreviewImages((prevImages) => prevImages.filter((_, i) => i !== index));
   };
 
   const selectedCategory = categories?.find((cat) => cat._id === category);
@@ -196,7 +213,7 @@ const AddProductPage = () => {
                   <img
                     src={URL.createObjectURL(mainImageUrl)}
                     alt="Main Image Preview"
-                    className="object-cover h-72 w-72 rounded mt-2"
+                    className="h-72 w-72 object-contain rounded mt-2"
                   />
                 </div>
               )}
@@ -210,11 +227,19 @@ const AddProductPage = () => {
 
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2 w-full mt-4">
                 {previewImages.map((previewImage, index) => (
-                  <div key={index}>
+                  <div key={index} className="relative">
+                    <div className="flex w-full justify-end">
+                      <IconButton
+                        className="bg-red-500 h-12 w-12 p-1 text-white rounded-full transition-colors duration-300 ease-in-out"
+                        onClick={() => handleImageDelete(index)}
+                      >
+                        ❌
+                      </IconButton>
+                    </div>
                     <img
                       src={URL.createObjectURL(previewImage)}
                       alt={`Secundaria ${index}`}
-                      className="object-cover h-72 w-full rounded"
+                      className="h-72 w-full object-contain rounded"
                     />
                   </div>
                 ))}
