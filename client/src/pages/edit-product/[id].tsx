@@ -95,22 +95,37 @@ const EditProductPage = () => {
     setLoading(true);
 
     if (!productName) {
-      showErrorMessage("El nombre del producto está vacío");
+      showErrorMessage("El nombre del producto es obligatorio");
+      setLoading(false);
+      return;
+    }
+
+    if (!category) {
+      showErrorMessage("La categoría del producto es obligatoria");
+      setLoading(false);
+      return;
+    }
+
+    if (!mainImageUrl && !existingMainImageUrl) {
+      showErrorMessage("La imagen principal del producto es obligatoria");
       setLoading(false);
       return;
     }
 
     const formData = new FormData();
     formData.append("name", productName);
-    if (category) formData.append("category", category);
+    formData.append("category", category);
     if (brand) formData.append("brand", brand);
     if (subCategory) formData.append("subCategory", subCategory);
     formData.append("specifications", specifications || "");
 
+    if (mainImageUrl) {
+      formData.append("images", mainImageUrl, mainImageUrl.name);
+    }
+    previewImages.forEach((image, index) => formData.append("images", image, `secondary-image-${index}`));
+
     if (technicalSheet) formData.append("technical_sheet", technicalSheet, technicalSheet.name);
     manuals.forEach((manual) => formData.append("manuals", manual, manual.name));
-    if (mainImageUrl) formData.append("images", mainImageUrl, mainImageUrl.name);
-    previewImages.forEach((image, index) => formData.append("images", image, `secondary-image-${index}`));
 
     try {
       const response = await fetch(`/api/edit-product/${id}`, { method: "PUT", body: formData });
@@ -253,20 +268,37 @@ const EditProductPage = () => {
               {existingPreviewImagesUrls.length > 0 && !previewImages.length && (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2 w-full mt-4">
                   {existingPreviewImagesUrls.map((url, index) => (
-                    <div key={index}>
-                      <img src={url} alt={`Secundaria ${index}`} className="object-cover h-72 w-full rounded" />
+                    <div key={index} className="relative">
+                      <div className="flex w-full justify-end">
+                        <IconButton
+                          className="bg-red-500 h-12 w-12 p-1 text-white rounded-full transition-colors duration-300 ease-in-out"
+                          onClick={() => handleExistingImageDelete(index)}
+                        >
+                          ❌
+                        </IconButton>
+                      </div>
+                      <img src={url} alt={`Secundaria ${index}`} className="h-72 w-full object-contain rounded" />
                     </div>
                   ))}
                 </div>
               )}
+
               {previewImages.length > 0 && (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2 w-full mt-4">
                   {previewImages.map((previewImage, index) => (
-                    <div key={index}>
+                    <div key={index} className="relative">
+                      <div className="flex w-full justify-end">
+                        <IconButton
+                          className="bg-red-500 h-12 w-12 p-1 text-white rounded-full transition-colors duration-300 ease-in-out"
+                          onClick={() => handleNewImageDelete(index)}
+                        >
+                          ❌
+                        </IconButton>
+                      </div>
                       <img
                         src={URL.createObjectURL(previewImage)}
                         alt={`Secundaria ${index}`}
-                        className="object-cover h-72 w-full rounded"
+                        className="h-72 w-full object-contain rounded"
                       />
                     </div>
                   ))}
