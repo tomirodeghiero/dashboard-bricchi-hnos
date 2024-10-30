@@ -3,17 +3,22 @@ require("dotenv").config();
 const express = require("express");
 const morgan = require("morgan");
 const cors = require("cors");
+const fs = require("fs");
+const csv = require("csv-parser");
+const stream = require('stream');
+const axios = require("axios");
 const mongoose = require("mongoose");
 const multer = require("multer");
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const cloudinary = require("cloudinary").v2;
 const cookieParser = require("cookie-parser");
 const Product = require("./models/Product");
-const ObjectId = mongoose.Types.ObjectId;
 const { Category, SubCategory, SubSubCategory } = require('./models/Category');
 const app = express();
 
-app.use(express.json()); // Debe estar antes de las rutas
+const upload = multer({ dest: "uploads/" });
+
+app.use(express.json());
 app.use(cookieParser());
 app.use(morgan("dev"));
 
@@ -71,6 +76,151 @@ mongoose.connect(process.env.DB_HOST, {
 //     mongoose.connection.close();
 //   }
 // });
+
+
+// Convertir URLs de Google Drive a URLs directas para Cloudinary
+function convertGoogleDriveUrl(url) {
+  const fileId = url.match(/\/d\/(.*?)\//);
+  return fileId ? `https://drive.google.com/uc?export=view&id=${fileId[1]}` : url;
+}
+
+// Validar URL
+function isValidUrlSync(url) {
+  try {
+    new URL(url);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+// Subir archivo a Cloudinary
+async function uploadFileToCloudinary(fileUrl, folder = "bricchihnos") {
+  try {
+    const response = await axios({
+      url: fileUrl,
+      method: "GET",
+      responseType: "stream",
+    });
+
+    return new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        { folder },
+        (error, result) => {
+          if (error) {
+            console.error("Error al subir archivo a Cloudinary:", error);
+            reject(error);
+          } else {
+            resolve(result.secure_url);
+          }
+        }
+      );
+
+      response.data.pipe(uploadStream);
+    });
+  } catch (error) {
+    console.error("Error al procesar el archivo:", error);
+    return null;
+  }
+}
+
+app.post("/api/upload-csv", express.json(), async (req, res) => {
+  const { csvData } = req.body;
+  console.log("CSV data:", csvData);
+
+  if (!csvData) {
+    return res.status(400).send("No se recibió ningún dato CSV");
+  }
+
+  const results = [];
+  const csvStream = new stream.Readable();
+  csvStream.push(csvData);
+  csvStream.push(null);
+
+  csvStream
+    .pipe(csv())
+    .on("data", (data) => results.push(data))
+    .on("end", async () => {
+      try {
+        // Ignorar el primer registro de datos (que podría ser un ejemplo)
+        const filteredResults = results.slice(1); 
+
+        const existingProductNames = new Set(
+          (await Product.find({}, "name")).map((product) => product.name)
+        );
+
+        for (let row of filteredResults) {
+          console.log("Row:", row);
+
+          // Verificar si el producto ya existe en la base de datos
+          if (existingProductNames.has(row.name)) {
+            console.log(`El producto "${row.name}" ya existe. Saltando...`);
+            continue;
+          }
+
+          // Subir imagen principal a Cloudinary si es una URL válida
+          const mainImageUrlDirect = convertGoogleDriveUrl(row.mainImageUrl);
+          const mainImageUrlCloudinary = isValidUrlSync(mainImageUrlDirect)
+            ? await uploadFileToCloudinary(mainImageUrlDirect)
+            : null;
+          console.log("Main image URL in Cloudinary:", mainImageUrlCloudinary);
+
+          // Subir imágenes secundarias a Cloudinary si son URLs válidas
+          const secondaryImageUrls = row.secondaryImageUrls
+            ? (
+                await Promise.all(
+                  row.secondaryImageUrls
+                    .split(";")
+                    .map((url) => convertGoogleDriveUrl(url.trim()))
+                    .map(async (url) => (isValidUrlSync(url) ? await uploadFileToCloudinary(url) : null))
+                )
+              ).filter((url) => url !== null) // Filtrar nulos después de Promise.all
+            : [];
+
+          // Subir archivo PDF de la hoja técnica a Cloudinary solo si es una URL válida
+          const technicalSheetUrl = isValidUrlSync(row.technicalSheetUrl)
+            ? await uploadFileToCloudinary(convertGoogleDriveUrl(row.technicalSheetUrl), "bricchihnos/pdfs")
+            : null;
+
+          // Subir archivos PDF de los manuales a Cloudinary si son URLs válidas
+          const manuals = row.manuals
+            ? (
+                await Promise.all(
+                  row.manuals
+                    .split(";")
+                    .map((url) => convertGoogleDriveUrl(url.trim()))
+                    .map(async (url) => (isValidUrlSync(url) ? { url: await uploadFileToCloudinary(url, "bricchihnos/manuals") } : null))
+                )
+              ).filter((manual) => manual !== null) // Filtrar nulos después de Promise.all
+            : [];
+
+          // Crear el producto con las URLs en Cloudinary
+          const product = new Product({
+            name: row.name,
+            category: row.category,
+            subCategory: row.subCategory || null,
+            brand: row.brand || null,
+            specifications: row.specifications,
+            mainImageUrl: mainImageUrlCloudinary,
+            secondaryImageUrls,
+            technical_sheet: {
+              file_name: row.technicalSheetFileName,
+              url: technicalSheetUrl,
+            },
+            manuals,
+          });
+
+          await product.save();
+          existingProductNames.add(row.name); // Añadir a los productos existentes para evitar duplicados en el mismo archivo
+        }
+        res.status(200).send("Productos agregados exitosamente");
+      } catch (error) {
+        console.error("Error al guardar los productos:", error);
+        res.status(500).send("Error al procesar los datos CSV");
+      }
+    });
+});
+
 
 // GET all products with pagination
 app.get("/api/products", async (req, res) => {

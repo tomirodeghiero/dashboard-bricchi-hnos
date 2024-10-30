@@ -20,16 +20,6 @@ const navigation = (): VerticalNavItemsType => {
       icon: AccountPlusOutline,
       path: "/add-product",
     },
-    {
-      title: "Mis Categorías",
-      icon: FormatListBulleted,
-      path: "/my-categories",
-    },
-    {
-      title: "Añadir Categoría",
-      icon: PlusBoxMultipleOutline,
-      path: "/add-category",
-    }
   ];
 };
 

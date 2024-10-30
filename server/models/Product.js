@@ -3,9 +3,9 @@ const Schema = mongoose.Schema;
 
 const productSchema = new Schema({
   name: { type: String, required: true },
-  category: { type: Schema.Types.ObjectId, ref: 'Category' },
-  subCategory: { type: Schema.Types.ObjectId, ref: 'SubSubCategory' },
-  brand: { type: Schema.Types.ObjectId, ref: 'SubCategory' },
+  category: { type: String, required: true },
+  subCategory: { type: String },
+  brand: { type: String },
   specifications: String,
   mainImageUrl: String,
   secondaryImageUrls: [String],
@@ -20,6 +20,5 @@ const productSchema = new Schema({
     },
   ],
 });
-
 
 module.exports = mongoose.model('Product', productSchema);

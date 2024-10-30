@@ -1,284 +1,171 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState } from "react";
 import {
-  FormControl,
-  InputLabel,
-  MenuItem,
-  Select,
   Button,
+  CircularProgress,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Typography,
+  Container,
+  Box,
   Card,
   CardContent,
-  CircularProgress,
-  Box,
   IconButton,
 } from "@mui/material";
-import dynamic from "next/dynamic";
+import { UploadFile } from "@mui/icons-material";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import { addBreaksAfterPeriods } from "src/utils/functions";
+import Papa from "papaparse";
 
-const ReactQuill = dynamic(() => import("react-quill"), { ssr: false });
-
-const AddProductPage = () => {
-  const [productName, setProductName] = useState("");
-  const [category, setCategory] = useState("");
-  const [brand, setBrand] = useState("");
-  const [subCategory, setSubCategory] = useState("");
-  const [specifications, setSpecifications] = useState("");
-  const [technicalSheet, setTechnicalSheet] = useState<File | null>(null);
-  const [manuals, setManuals] = useState<File[]>([]);
-  const [mainImageUrl, setMainImageUrl] = useState<File | null>(null);
-  const [previewImages, setPreviewImages] = useState<File[]>([]);
-  const [categories, setCategories] = useState([]);
+const CSVUploadPage = () => {
+  const [csvData, setCsvData] = useState([]);
   const [loading, setLoading] = useState(false);
-  const formRef = useRef(null);
 
-  // Estado para almacenar las subcategorías
-  const [subCategories, setSubCategories] = useState([]);
-
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const response = await fetch("/api/categories");
-        const data = await response.json();
-        setCategories(data.categories);
-      } catch (error) {
-        console.error("Error fetching categories:", error);
-      }
-    };
-
-    fetchCategories();
-  }, []);
-
-  const showErrorMessage = (message) => {
-    toast.error(message, { position: "top-center", autoClose: 5000 });
+  const handleFileChange = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (result) => {
+          setCsvData(result.data);
+          toast.success("Archivo CSV cargado con éxito", { position: "top-center", autoClose: 3000 });
+        },
+        error: (error) => {
+          console.error("Error al procesar el archivo CSV:", error);
+          toast.error("Error al cargar el archivo CSV", { position: "top-center" });
+        },
+      });
+    }
   };
 
-  const handleSubmitProduct = async (e) => {
-    e.preventDefault();
+  const handleSaveData = async () => {
     setLoading(true);
-
-    if (!productName) {
-      showErrorMessage("El nombre del producto es obligatorio");
-      setLoading(false);
-      return;
-    }
-
-    if (!category) {
-      showErrorMessage("La categoría del producto es obligatoria");
-      setLoading(false);
-      return;
-    }
-
-    if (!mainImageUrl) {
-      showErrorMessage("La imagen principal del producto es obligatoria");
-      setLoading(false);
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append("name", productName);
-    formData.append("category", category);
-    if (brand) formData.append("brand", brand);
-    if (subCategory) formData.append("subCategory", subCategory);
-    formData.append("specifications", specifications || "");
-
-    if (technicalSheet) formData.append("technical_sheet", technicalSheet, technicalSheet.name);
-    manuals.forEach((manual) => formData.append("manuals", manual, manual.name));
-    formData.append("images", mainImageUrl, mainImageUrl.name);
-    previewImages.forEach((image, index) => formData.append("images", image, `secondary-image-${index}`));
-
     try {
-      const response = await fetch("/api/add-product", { method: "POST", body: formData });
+      if (csvData.length === 0) {
+        toast.error("Cargue el archivo CSV primero", { position: "top-center" });
+        setLoading(false);
+        return;
+      }
+
+      const csvText = Papa.unparse(csvData);
+
+      const response = await fetch("http://localhost:5001/api/upload-csv", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ csvData: csvText }),
+      });
+
       if (response.ok) {
-        toast.success("Producto agregado exitosamente", { position: "top-center", autoClose: 5000 });
-        setProductName("");
-        setCategory("");
-        setBrand("");
-        setSubCategory("");
-        setSpecifications("");
-        setMainImageUrl(null);
-        setPreviewImages([]);
-        setTechnicalSheet(null);
-        setManuals([]);
-        formRef.current?.scrollIntoView({ behavior: "smooth" });
+        toast.success("Datos guardados en la base de datos con éxito", { position: "top-center", autoClose: 3000 });
+        setCsvData([]);
       } else {
-        toast.error("Falló al agregar el producto", { position: "top-center" });
+        toast.error("Error al guardar los datos", { position: "top-center" });
       }
     } catch (error) {
-      console.error(error);
-      showErrorMessage("Error al agregar el producto");
+      console.error("Error al guardar los datos:", error);
+      toast.error("Error al guardar los datos en la base de datos", { position: "top-center" });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleMainImageChange = (event) => {
-    const file = event.target.files[0];
-    if (file) setMainImageUrl(file);
-  };
-
-  const handleSecondaryImagesChange = (event) => {
-    const files = Array.from(event.target.files);
-    setPreviewImages((prevImages) => [...prevImages, ...files]);
-  };
-
-  const handleManualChange = (event) => {
-    const files = Array.from(event.target.files);
-    setManuals((prev) => [...prev, ...files]);
-  };
-
-  const handleImageDelete = (index) => {
-    setPreviewImages((prevImages) => prevImages.filter((_, i) => i !== index));
-  };
-
-  const selectedCategory = categories?.find((cat) => cat._id === category);
-  const selectedBrand = selectedCategory?.subcategories?.find((subCat) => subCat._id === brand);
-
-  // Actualiza las subcategorías cuando se selecciona una marca
-  useEffect(() => {
-    if (selectedBrand) {
-      setSubCategories(selectedBrand.subSubCategories || []); // Suponiendo que 'subSubCategories' tiene la información de las subcategorías
-      setSubCategory(""); // Reiniciar la subcategoría cuando se cambia la marca
-    } else {
-      setSubCategories([]); // Reiniciar las subcategorías si no hay marca seleccionada
-    }
-  }, [selectedBrand]);
-
   return (
-    <>
-      <div ref={formRef} className="flex justify-center items-center w-full">
-        <Card className="shadow-lg w-full max-w-7xl">
-          <CardContent>
-            <p className="uppercase font-medium text-lg text-gray-500 mb-6">
-              🛍️ ¡Agregar un nuevo producto!
-            </p>
+    <Container maxWidth="xl" sx={{ mt: 10, display: "flex", flexDirection: "column", alignItems: "center" }}>
+      <Card elevation={4} sx={{ borderRadius: 3, width: "100%", maxWidth: "800px", p: 4 }}>
+        <CardContent sx={{ textAlign: "center" }}>
+          <Typography variant="h4" component="h1" fontWeight="bold" gutterBottom>
+            Subir y Guardar CSV
+          </Typography>
+          <Typography variant="body1" color="text.secondary" gutterBottom>
+            Carga un archivo CSV para previsualizar sus datos y guardarlos en la base de datos.
+          </Typography>
+
+          <Box sx={{ my: 4, display: "flex", flexDirection: "column", alignItems: "center" }}>
             <input
-              className="text-gray-800 px-3 h-16 bg-gray-200 mt-2 mb-5 text-2xl w-full font-medium border-b-2 border-gray-300 focus:border-blue-500 transition"
-              value={productName}
-              placeholder="Nombre del Producto"
-              onChange={(e) => setProductName(e.target.value)}
+              accept=".csv"
+              style={{ display: "none" }}
+              id="csv-file-upload"
+              type="file"
+              onChange={handleFileChange}
             />
-            <FormControl variant="outlined" fullWidth>
-              <InputLabel>Categoría</InputLabel>
-              <Select value={category} onChange={(e) => setCategory(e.target.value)} label="Categoría">
-                {categories.map((categoryOption) => (
-                  <MenuItem key={categoryOption._id} value={categoryOption._id}>
-                    {categoryOption.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <label htmlFor="csv-file-upload">
+              <IconButton
+                color="primary"
+                component="span"
+                sx={{
+                  p: 2,
+                  bgcolor: "primary.light",
+                  color: "white",
+                  "&:hover": { bgcolor: "primary.main" },
+                  boxShadow: 3,
+                  borderRadius: "50%",
+                }}
+              >
+                <UploadFile fontSize="large" />
+              </IconButton>
+              <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+                Seleccionar archivo CSV
+              </Typography>
+            </label>
+          </Box>
 
-            {selectedCategory && selectedCategory.subcategories.length > 0 && (
-              <Box mt={4}>
-                <FormControl variant="outlined" fullWidth>
-                  <InputLabel>Marca</InputLabel>
-                  <Select value={brand} onChange={(e) => setBrand(e.target.value)} label="Marca">
-                    {selectedCategory.subcategories.map((subCat) => (
-                      <MenuItem key={subCat._id} value={subCat._id}>
-                        {subCat.name}
-                      </MenuItem>
+          {csvData.length > 0 && (
+            <TableContainer component={Paper} elevation={2} sx={{ borderRadius: 2, mt: 4, width: "100%" }}>
+              <Table stickyHeader>
+                <TableHead>
+                  <TableRow>
+                    {Object.keys(csvData[0]).map((key, index) => (
+                      <TableCell key={index} sx={{ fontWeight: "bold", bgcolor: "secondary.main", color: "white" }}>
+                        {key}
+                      </TableCell>
                     ))}
-                  </Select>
-                </FormControl>
-              </Box>
-            )}
-
-            {selectedBrand && subCategories.length > 0 && (
-              <Box mt={4}>
-                <FormControl variant="outlined" fullWidth>
-                  <InputLabel>Subcategoría</InputLabel>
-                  <Select value={subCategory} onChange={(e) => setSubCategory(e.target.value)} label="Subcategoría">
-                    {subCategories.map((subSubCat) => (
-                      <MenuItem key={subSubCat._id} value={subSubCat._id}>
-                        {subSubCat.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Box>
-            )}
-
-            <div className="mt-8">
-              <ReactQuill value={addBreaksAfterPeriods(specifications)} onChange={setSpecifications} />
-            </div>
-
-            <div className="mt-8">
-              <Button variant="contained" component="label">
-                Subir Imagen Principal
-                <input type="file" onChange={handleMainImageChange} hidden />
-              </Button>
-              {mainImageUrl && (
-                <div className="mt-4">
-                  <img
-                    src={URL.createObjectURL(mainImageUrl)}
-                    alt="Main Image Preview"
-                    className="h-72 w-72 object-contain rounded mt-2"
-                  />
-                </div>
-              )}
-            </div>
-
-            <div className="mt-8">
-              <Button variant="contained" component="label">
-                Subir Imágenes Secundarias
-                <input type="file" multiple onChange={handleSecondaryImagesChange} hidden />
-              </Button>
-
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 w-full mt-4">
-                {previewImages.map((previewImage, index) => (
-                  <div key={index} className="relative">
-                    <div className="flex w-full justify-end">
-                      <IconButton
-                        className="bg-red-500 h-12 w-12 p-1 text-white rounded-full transition-colors duration-300 ease-in-out"
-                        onClick={() => handleImageDelete(index)}
-                      >
-                        ❌
-                      </IconButton>
-                    </div>
-                    <img
-                      src={URL.createObjectURL(previewImage)}
-                      alt={`Secundaria ${index}`}
-                      className="h-72 w-full object-contain rounded"
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="mt-4">
-              <Button variant="contained" component="label">
-                Subir Ficha Técnica (PDF)
-                <input type="file" onChange={(e) => setTechnicalSheet(e.target.files[0])} accept="application/pdf" hidden />
-              </Button>
-              {technicalSheet && <p className="mt-2 text-gray-600">Archivo subido: {technicalSheet.name}</p>}
-            </div>
-
-            <div className="mt-8">
-              <Button variant="contained" component="label">
-                Subir Manuales (PDF)
-                <input type="file" multiple onChange={handleManualChange} accept="application/pdf" hidden />
-              </Button>
-              {manuals.length > 0 && (
-                <ul className="mt-2">
-                  {manuals.map((manual, index) => (
-                    <li key={index} className="text-gray-600">{manual.name}</li>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {csvData.slice(1).map((row, rowIndex) => (
+                    <TableRow key={rowIndex}>
+                      {Object.values(row).map((value, cellIndex) => (
+                        <TableCell key={cellIndex}>{value}</TableCell>
+                      ))}
+                    </TableRow>
                   ))}
-                </ul>
-              )}
-            </div>
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
 
-            <div className="w-full mt-8">
-              <Button onClick={handleSubmitProduct} variant="contained" disabled={loading} className="w-full">
-                {loading ? <CircularProgress size={24} /> : "Agregar Producto"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-      <ToastContainer position="top-right" autoClose={5000} />
-    </>
+          {csvData.length > 0 && (
+            <Button
+              variant="contained"
+              onClick={handleSaveData}
+              disabled={loading}
+              sx={{
+                mt: 3,
+                px: 4,
+                py: 1.5,
+                width: "100%",
+                bgcolor: "#008000",
+                color: "white",
+                fontWeight: "bold",
+                "&:hover": { bgcolor: "success.dark" },
+                boxShadow: 2,
+              }}
+            >
+              {loading ? <CircularProgress size={24} color="inherit" /> : "Guardar en Base de Datos"}
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+      <ToastContainer position="top-center" autoClose={3000} />
+    </Container>
   );
 };
 
-export default AddProductPage;
+export default CSVUploadPage;

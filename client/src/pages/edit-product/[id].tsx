@@ -15,6 +15,7 @@ import dynamic from "next/dynamic";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { addBreaksAfterPeriods } from "src/utils/functions";
+import IconButton from "@mui/material/IconButton";
 
 const ReactQuill = dynamic(() => import("react-quill"), { ssr: false });
 
@@ -77,9 +78,9 @@ const EditProductPage = () => {
             const data = await response.json();
             console.log("Product data:", data);
             setProductName(data.name);
-            setCategory(data.category?._id || "");
-            setBrand(data.brand?._id || "");
-            setSubCategory(data.subCategory?._id || ""); // Asegúrate de que esto esté correcto
+            setCategory(data.category || "");
+            setBrand(data.brand || "");
+            setSubCategory(data.subCategory || "");
             setSpecifications(data.specifications);
             setExistingMainImageUrl(data.mainImageUrl);
             setExistingPreviewImagesUrls(data.secondaryImageUrls || []);
