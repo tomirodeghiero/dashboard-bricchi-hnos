@@ -16,8 +16,6 @@ const Product = require("./models/Product");
 const { Category, SubCategory, SubSubCategory } = require('./models/Category');
 const app = express();
 
-const upload = multer({ dest: "uploads/" });
-
 app.use(express.json());
 app.use(cookieParser());
 app.use(morgan("dev"));

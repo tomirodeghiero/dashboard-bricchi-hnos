@@ -54,7 +54,7 @@ const CSVUploadPage = () => {
 
       const csvText = Papa.unparse(csvData);
 
-      const response = await fetch("http://localhost:5001/api/upload-csv", {
+      const response = await fetch("https://server-dashboardbricchihnos.vercel.app/api/upload-csv", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
