@@ -90,11 +90,6 @@ const MyProductsPage = () => {
     router.push(`/edit-product/${productId}`);
   };
 
-  function convertGoogleDriveUrl(url: string) {
-    const fileId = url.match(/\/d\/(.*?)\//);
-    return fileId ? `https://drive.google.com/uc?export=view&id=${fileId[1]}` : url;
-  }
-
   return (
     <div>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 lg:gap-6 lg:py-8">
