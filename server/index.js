@@ -5,24 +5,22 @@ const morgan = require("morgan");
 const cors = require("cors");
 const fs = require("fs");
 const csv = require("csv-parser");
-const stream = require('stream');
 const axios = require("axios");
 const mongoose = require("mongoose");
 const multer = require("multer");
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const cloudinary = require("cloudinary").v2;
 const cookieParser = require("cookie-parser");
-const xlsx = require("xlsx"); // Asegúrate de instalar la biblioteca con `npm install xlsx`
 const Product = require("./models/Product");
 const { Category, SubCategory, SubSubCategory } = require('./models/Category');
 const app = express();
 
-const upload = multer({ dest: "uploads/" });
-const router = express.Router();
-
 app.use(express.json());
 app.use(cookieParser());
 app.use(morgan("dev"));
+app.use("/uploads", express.static(__dirname + "/uploads"));
+app.use(morgan("dev"));
+app.use(paymentRoutes);
 
 // Ruta estática del archivo CSV
 const staticFilePath = "./uploads/Productos-BricchiHnos.csv";
