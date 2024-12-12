@@ -20,7 +20,6 @@ app.use(cookieParser());
 app.use(morgan("dev"));
 app.use("/uploads", express.static(__dirname + "/uploads"));
 app.use(morgan("dev"));
-app.use(paymentRoutes);
 
 // Ruta estática del archivo CSV
 const staticFilePath = "./uploads/Productos-BricchiHnos.csv";
