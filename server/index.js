@@ -13,6 +13,7 @@ const cloudinary = require("cloudinary").v2;
 const cookieParser = require("cookie-parser");
 const Product = require("./models/Product");
 const { Category, SubCategory, SubSubCategory } = require('./models/Category');
+
 const app = express();
 
 app.use(express.json());
@@ -21,10 +22,8 @@ app.use(morgan("dev"));
 app.use("/uploads", express.static(__dirname + "/uploads"));
 app.use(morgan("dev"));
 
-// Ruta estática del archivo CSV
-const staticFilePath = "./uploads/Productos-BricchiHnos.csv";
+const staticFilePath = "./Productos-BricchiHnos.csv";
 
-// Configuración de Cloudinary
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
@@ -63,17 +62,15 @@ app.use(
   })
 );
 
-// Función para convertir URLs de Google Drive a enlaces de descarga directa
 function convertGoogleDriveUrl(url) {
   const regex = /\/d\/([a-zA-Z0-9-_]+)\//;
   const match = url.match(regex);
   if (match && match[1]) {
     return `https://drive.google.com/uc?export=download&id=${match[1]}`;
   }
-  return url; // Retorna la URL original si no coincide con el patrón
+  return url;
 }
 
-// Conexión a la base de datos
 mongoose.connect(process.env.DB_HOST, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
