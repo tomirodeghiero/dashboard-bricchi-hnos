@@ -12,6 +12,8 @@ const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const cloudinary = require("cloudinary").v2;
 const cookieParser = require("cookie-parser");
 const Product = require("./models/Product");
+const sharp = require("sharp");
+const streamifier = require("streamifier");
 const { Category, SubCategory, SubSubCategory } = require('./models/Category');
 
 const app = express();
@@ -22,7 +24,7 @@ app.use(morgan("dev"));
 app.use("/uploads", express.static(__dirname + "/uploads"));
 app.use(morgan("dev"));
 
-const staticFilePath = "./Productos-BricchiHnos.csv";
+const staticFilePath = "./products.csv";
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -77,39 +79,46 @@ mongoose.connect(process.env.DB_HOST, {
 });
 
 // // Manejar la conexión a la base de datos
-// mongoose.connection.once("open", async () => {
-//   try {
-//     console.log("Connected to the database");
+mongoose.connection.once("open", async () => {
+  try {
+    console.log("Connected to the database");
 
-//     // Cargar los productos desde el CSV
-//     await loadCSVOnStartup();
+    // Cargar los productos desde el CSV
+    // await loadCSVOnStartup();
 
-//     console.log("Server ready with products loaded");
+    console.log("Server ready with products loaded");
 
-//     // No cerrar la conexión aquí para mantener el servidor activo
-//     // mongoose.connection.close();
-//   } catch (error) {
-//     console.error("Error deleting products or loading CSV:", error);
-//     // mongoose.connection.close();
-//   }
-// });
+    // No cerrar la conexión aquí para mantener el servidor activo
+    // mongoose.connection.close();
+  } catch (error) {
+    console.error("Error deleting products or loading CSV:", error);
+    // mongoose.connection.close();
+  }
+});
 
 // Función para subir un archivo a Cloudinary desde una URL
-async function uploadFileToCloudinary(fileUrl, folder = "bricchihnos") {
+async function uploadFileToCloudinary(fileUrl, folder = "bricchihnos", maxWidth = 1920, quality = 80) {
   try {
-    // Convertir la URL de Google Drive a enlace de descarga directa
     const directUrl = convertGoogleDriveUrl(fileUrl);
 
-    // Descargar el archivo como stream
-    const response = await axios({
-      url: directUrl,
-      method: "GET",
-      responseType: "stream",
-    });
+    // 1. Descargar como arrayBuffer
+    const response = await axios.get(directUrl, { responseType: "arraybuffer" });
+    const originalBuffer = response.data; // Este es el buffer de la imagen "grande"
 
+    // 2. Procesar la imagen con fondo blanco
+    const resizedBuffer = await sharp(originalBuffer)
+      .resize({ width: maxWidth, withoutEnlargement: true }) // Ajusta el ancho máx. sin "forzar" si es menor
+      .flatten({ background: { r: 255, g: 255, b: 255 } }) // Añade fondo blanco
+      .jpeg({ quality }) // Cambiar formato a JPEG con calidad especificada
+      .toBuffer();
+
+    // 3. Subir a Cloudinary desde un Stream
     return new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
-        { folder, resource_type: "auto" }, // resource_type para manejar diferentes tipos de archivos
+        {
+          folder,
+          resource_type: "image",
+        },
         (error, result) => {
           if (error) {
             console.error("Error al subir archivo a Cloudinary:", error);
@@ -120,7 +129,8 @@ async function uploadFileToCloudinary(fileUrl, folder = "bricchihnos") {
         }
       );
 
-      response.data.pipe(uploadStream);
+      // 4. Convertir el buffer a stream y pipe al uploader
+      streamifier.createReadStream(resizedBuffer).pipe(uploadStream);
     });
   } catch (error) {
     console.error("Error al procesar el archivo:", error);
@@ -129,10 +139,8 @@ async function uploadFileToCloudinary(fileUrl, folder = "bricchihnos") {
 }
 
 // Función para cargar y procesar el CSV al iniciar el servidor
-// Función para cargar y procesar el CSV al iniciar el servidor
-// Función para cargar y procesar el CSV al iniciar el servidor
 const loadCSVOnStartup = async () => {
-  const products = [];
+  const productsToInsert = [];
   let totalProducts = 0;
   let successfullyLoaded = 0;
   let failedLoads = 0;
@@ -148,123 +156,128 @@ const loadCSVOnStartup = async () => {
 
     for await (const row of csvStream) {
       totalProducts += 1;
-      console.log(`Procesando producto ${totalProducts}: ${row.name || "Sin nombre"}`);
+      const productName = row.name?.trim() || "Sin nombre";
+      console.log(`\nProcesando producto n°${totalProducts}: "${productName}"`);
 
-      // Validar que los campos obligatorios existan
+      // 1) Verificar datos mínimos requeridos: name y category
       if (!row.name || !row.category) {
-        console.warn(`Producto ${totalProducts} ignorado debido a datos faltantes:`, row);
+        console.warn(
+          `\t[WARN] Producto "${productName}" ignorado por datos faltantes (name o category).`
+        );
         failedLoads += 1;
-        continue; // Ignorar registros incompletos
+        continue;
       }
 
       try {
-        // Subir imagen principal a Cloudinary si existe
+        // 2) Verificar si ya existe un producto con ese nombre
+        const existingProduct = await Product.findOne({ name: row.name.trim() });
+        if (existingProduct) {
+          console.log(
+            `\t[INFO] El producto "${row.name}" ya existe en la base de datos. Se omite creación.`
+          );
+          continue;
+        }
+
+        // 3) Chequear si es 'mandatory' = 'Y'
+        const isMandatory = (row.mandatory || "").trim().toUpperCase() === "Y";
+        if (isMandatory) {
+          console.log(`\t[INFO] Producto "${row.name}" es MANDATORY (Y).`);
+        }
+
+        // ============ Subir imágenes a Cloudinary ============
+
+        // Imagen principal
         let mainImageUrlCloudinary = null;
         if (row.mainImageUrl && isValidUrlSync(row.mainImageUrl)) {
           mainImageUrlCloudinary = await uploadFileToCloudinary(row.mainImageUrl);
           if (mainImageUrlCloudinary) {
-            console.log(`Imagen principal subida para producto ${row.name}`);
+            console.log(`\t[OK] Imagen principal subida para "${row.name}".`);
           } else {
-            console.warn(`Fallo al subir la imagen principal para producto ${row.name}`);
+            console.warn(`\t[WARN] Falló la subida de la imagen principal.`);
           }
         }
 
-        // Subir imágenes secundarias a Cloudinary si existen
+        // Subir imágenes secundarias (todas)
         let secondaryImageUrlsCloudinary = [];
         if (row.secondaryImageUrls) {
+          // Dividir las URLs por ';'
           const secondaryUrls = row.secondaryImageUrls
             .split(";")
-            .map(url => url.trim())
-            .filter(url => isValidUrlSync(url));
+            .map((url) => url.trim())
+            .filter((url) => isValidUrlSync(url));
 
+          // Recorrer cada URL y subirla a Cloudinary
           for (const url of secondaryUrls) {
             const uploadedUrl = await uploadFileToCloudinary(url);
             if (uploadedUrl) {
               secondaryImageUrlsCloudinary.push(uploadedUrl);
-              console.log(`Imagen secundaria subida para producto ${row.name}`);
+              console.log(`[OK] Imagen secundaria subida para "${row.name}".`);
             } else {
-              console.warn(`Fallo al subir una imagen secundaria para producto ${row.name}`);
+              console.warn(
+                `[WARN] Falló la subida de una imagen secundaria para "${row.name}".`
+              );
             }
           }
         }
 
-        // Subir hoja técnica a Cloudinary si existe
-        let technicalSheetUrlCloudinary = null;
-        if (row.technicalSheetUrl && isValidUrlSync(row.technicalSheetUrl)) {
-          technicalSheetUrlCloudinary = await uploadFileToCloudinary(row.technicalSheetUrl, "bricchihnos/pdfs");
-          if (technicalSheetUrlCloudinary) {
-            console.log(`Hoja técnica subida para producto ${row.name}`);
-          } else {
-            console.warn(`Fallo al subir la hoja técnica para producto ${row.name}`);
-          }
-        }
-
-        // Subir manuales a Cloudinary si existen
-        let manualsCloudinary = [];
-        if (row.manuals) {
-          const manualUrls = row.manuals
-            .split(";")
-            .map(url => url.trim())
-            .filter(url => isValidUrlSync(url));
-
-          for (const url of manualUrls) {
-            const uploadedUrl = await uploadFileToCloudinary(url, "bricchihnos/manuals");
-            if (uploadedUrl) {
-              manualsCloudinary.push({ url: uploadedUrl });
-              console.log(`Manual subido para producto ${row.name}`);
-            } else {
-              console.warn(`Fallo al subir un manual para producto ${row.name}`);
-            }
-          }
-        }
-
-        // Crear el objeto del producto
+        // 4) Construir el objeto del producto (sin technical_sheet ni manuals)
         const product = {
-          name: row.name,
-          category: row.category,
-          subCategory: row.subCategory || null,
-          brand: row.brand || null,
-          specifications: row.specifications || null,
+          name: row.name.trim(),
+          category: row.category.trim(),
+          subCategory: row.subCategory?.trim() || null,
+          brand: row.brand?.trim() || null,
+          specifications: row.specifications?.trim() || null,
           mainImageUrl: mainImageUrlCloudinary,
           secondaryImageUrls: secondaryImageUrlsCloudinary,
-          technical_sheet: {
-            file_name: row.technicalSheetFileName || null,
-            url: technicalSheetUrlCloudinary,
-          },
-          manuals: manualsCloudinary,
         };
 
-        products.push(product);
+        productsToInsert.push(product);
         successfullyLoaded += 1;
-        console.log(`Producto ${totalProducts} (${row.name}) cargado exitosamente.`);
+        console.log(`\t[OK] Listo para insertar: "${row.name}"`);
       } catch (productError) {
-        console.error(`Error al procesar el producto ${totalProducts}:`, productError);
+        console.error(
+          `\t[ERROR] Ocurrió un problema con el producto "${productName}":`,
+          productError
+        );
         failedLoads += 1;
       }
-    }
+    } // fin del for await
 
-    // Insertar los productos en la base de datos
-    if (products.length > 0) {
+    // 5) Insertar todos los productos nuevos en la base de datos
+    if (productsToInsert.length > 0) {
       try {
-        await Product.insertMany(products);
-        console.log("Todos los productos han sido insertados en la base de datos.");
+        await Product.insertMany(productsToInsert);
+        console.log(
+          `\n[OK] Se insertaron ${productsToInsert.length} productos nuevos en la base de datos.`
+        );
       } catch (dbError) {
-        console.error("Error al insertar productos en la base de datos:", dbError);
+        console.error("[ERROR] Al insertar productos en la base de datos:", dbError);
       }
     }
 
     // Resumen de la carga
-    console.log(`\nResumen de la carga CSV:`);
-    console.log(`Total de productos procesados: ${totalProducts}`);
-    console.log(`Productos cargados exitosamente: ${successfullyLoaded}`);
-    console.log(`Productos fallidos: ${failedLoads}`);
-    console.log("Carga de productos completada.");
+    console.log("\n=== Resumen de la carga CSV ===");
+    console.log(`Total de productos procesados:        ${totalProducts}`);
+    console.log(`Productos preparados para insertar:   ${productsToInsert.length}`);
+    console.log(`Productos insertados exitosamente:    ${successfullyLoaded}`);
+    console.log(`Productos fallidos:                   ${failedLoads}`);
+    console.log("=== Fin de la carga de productos ===\n");
   } catch (error) {
-    console.error("Error al procesar el archivo CSV:", error);
+    console.error("Error general al procesar el archivo CSV:", error);
   }
 };
 
 // Validar URL
+function isValidUrlSync(url) {
+  try {
+    new URL(url);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+// Validar URL (mismo helper)
 function isValidUrlSync(url) {
   try {
     new URL(url);
@@ -665,20 +678,69 @@ app.put("/api/edit-category/:id", async (req, res) => {
 //   }
 // });
 
-// GET - Obtener una categoría específica por ID
-app.get("/api/category/:id", async (req, res) => {
+// DELETE - Eliminar un producto por nombre (recibiendo el nombre en el cuerpo)
+app.delete("/api/delete-product-by-name", async (req, res) => {
   try {
-    const categoryId = req.params.id;
-    const category = await Category.findById(categoryId).populate('subcategories');
+    const { name } = req.body; // Extraer el nombre del producto del cuerpo de la solicitud
 
-    if (!category) {
-      return res.status(404).json({ message: "Category not found" });
+    if (!name || name.trim() === "") {
+      return res.status(400).json({ message: "El nombre del producto es obligatorio." });
     }
 
-    res.status(200).json({ category });
+    const product = await Product.findOneAndDelete({ name: name.trim() });
+
+    if (!product) {
+      return res.status(404).json({ message: "Producto no encontrado" });
+    }
+
+    res.status(200).json({ message: "Producto eliminado exitosamente", product });
   } catch (err) {
-    console.error("Error fetching category:", err);
-    res.status(500).json({ message: "Server error", error: err.message });
+    console.error("Error eliminando producto:", err);
+    res.status(500).json({ message: "Error en el servidor", error: err.message });
+  }
+});
+
+// DELETE - Eliminar un producto por ID
+app.delete("/api/delete-product-by-id", async (req, res) => {
+  try {
+    const { id } = req.body; // Extraer el nombre del producto del cuerpo de la solicitud
+
+    if (!id || id.trim() === "") {
+      return res.status(400).json({ message: "El nombre del producto es obligatorio." });
+    }
+
+    const product = await Product.findOneAndDelete({ id: id.trim() });
+
+    if (!product) {
+      return res.status(404).json({ message: "Producto no encontrado" });
+    }
+
+    res.status(200).json({ message: "Producto eliminado exitosamente", product });
+  } catch (err) {
+    console.error("Error eliminando producto:", err);
+    res.status(500).json({ message: "Error en el servidor", error: err.message });
+  }
+});
+
+// DELETE - Eliminar un producto por ID
+app.delete("/api/delete-product/:id", async (req, res) => {
+  try {
+    const productId = req.params.id; // Obtiene el ID del producto de los parámetros de la URL
+
+    if (!mongoose.Types.ObjectId.isValid(productId)) {
+      return res.status(400).json({ message: "ID de producto no válido." });
+    }
+
+    const product = await Product.findByIdAndDelete(productId);
+
+    if (!product) {
+      return res.status(404).json({ message: "Producto no encontrado" });
+    }
+
+    res.status(200).json({ message: "Producto eliminado exitosamente", product });
+  } catch (err) {
+    console.error("Error eliminando producto:", err);
+    res.status(500).json({ message: "Error en el servidor", error: err.message });
   }
 });
 
